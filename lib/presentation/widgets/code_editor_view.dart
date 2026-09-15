@@ -219,29 +219,36 @@ class _CodeEditorViewState extends State<CodeEditorView> {
             ),
           ),
 
-        // Code Field
+        // Scrollable editor area bounded strictly by Expanded
         Expanded(
-          child: RepaintBoundary(
-            child: CodeTheme(
-              data: CodeThemeData(styles: _activeTheme),
-              child: CodeField(
-                controller: widget.controller,
-                textStyle: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: widget.fontSize,
-                  height: 1.45,
-                ),
-                gutterStyle: const GutterStyle(
-                  showLineNumbers: true,
-                  width: 56,
-                  textStyle: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    color: Color(0xFF5C6370),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: CodeTheme(
+                    data: CodeThemeData(styles: _activeTheme),
+                    child: CodeField(
+                      controller: widget.controller,
+                      textStyle: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: widget.fontSize,
+                        height: 1.45,
+                      ),
+                      gutterStyle: const GutterStyle(
+                        showLineNumbers: true,
+                        width: 56,
+                        textStyle: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: Color(0xFF5C6370),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
 
