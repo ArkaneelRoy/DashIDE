@@ -332,6 +332,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final isCompact = MediaQuery.of(context).size.width < 700;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Column(
           children: [
