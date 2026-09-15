@@ -3,11 +3,17 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:highlight/languages/dart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'data/models/file_node.dart';
 import 'data/repositories/workspace_repository.dart';
 import 'data/repositories/github_build_service.dart';
 import 'presentation/widgets/code_editor_view.dart';
 import 'presentation/widgets/live_preview_view.dart';
+import 'presentation/widgets/ide_app_bar.dart';
+import 'presentation/widgets/ide_activity_rail.dart';
+import 'presentation/widgets/ide_status_bar.dart';
+import 'presentation/widgets/ide_tab_bar.dart';
+import 'presentation/widgets/ide_panels.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,12 +28,14 @@ class DashIDEApp extends StatelessWidget {
     return MaterialApp(
       title: 'DashIDE',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(useMaterial3: true).copyWith(
-        scaffoldBackgroundColor: const Color(0xFF21252B),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1E2227),
-          elevation: 0,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF1E1E24),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF61AFEF),
+          surface: Color(0xFF21252B),
         ),
+        dividerColor: const Color(0xFF282C34),
       ),
       home: const WorkspacePage(),
     );
@@ -49,18 +57,21 @@ class _WorkspacePageState extends State<WorkspacePage> {
   final List<File> _openTabs = [];
   File? _activeFile;
 
-  final List<String> _consoleLogs = ['DashIDE workspace initialized.'];
-  bool _showConsole = false;
+  int _activePanel = 0;
   bool _isPreviewMode = false;
+  String _savedPatToken = '';
+  final List<String> _consoleLogs = ['DashIDE core ready.'];
+
+  int _cursorLine = 1;
+  int _cursorCol = 1;
+  String _buildStatus = 'Idle';
 
   @override
   void initState() {
     super.initState();
-    _editorController = CodeController(
-      text: '',
-      language: dart,
-    );
+    _editorController = CodeController(text: '', language: dart);
     _initWorkspace();
+    _loadPreferences();
   }
 
   @override
@@ -69,34 +80,43 @@ class _WorkspacePageState extends State<WorkspacePage> {
     super.dispose();
   }
 
-  void _log(String message) {
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _savedPatToken = prefs.getString('github_pat_token') ?? '');
+  }
+
+  Future<void> _saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('github_pat_token', token);
+    setState(() => _savedPatToken = token);
+  }
+
+  void _log(String msg) {
+    setState(() => _consoleLogs.add('[${DateTime.now().toIso8601String().substring(11, 19)}] $msg'));
+  }
+
+  void _updateCursor() {
+    final sel = _editorController.selection;
+    if (sel.baseOffset < 0) return;
+    final textBefore = _editorController.text.substring(0, sel.baseOffset);
+    final lines = textBefore.split('\n');
     setState(() {
-      _consoleLogs.add('[${DateTime.now().toIso8601String().substring(11, 19)}] $message');
+      _cursorLine = lines.length;
+      _cursorCol = lines.last.length + 1;
     });
   }
 
   Future<void> _initWorkspace() async {
     await _repo.initDefaultProject();
-    await _refreshFileTree();
-
-    final mainDart = _findMainDart(_files);
-    if (mainDart != null && _activeFile == null) {
-      await _openFile(mainDart);
-    }
-  }
-
-  Future<void> _refreshFileTree() async {
     final tree = await _repo.loadFileTree();
-    setState(() {
-      _files = tree;
-    });
+    setState(() => _files = tree);
+    final mainDart = _findMainDart(tree);
+    if (mainDart != null && _activeFile == null) await _openFile(mainDart);
   }
 
   File? _findMainDart(List<FileNode> nodes) {
     for (final node in nodes) {
-      if (!node.isDirectory && node.name == 'main.dart') {
-        return node.entity as File;
-      }
+      if (!node.isDirectory && node.name == 'main.dart') return node.entity as File;
       final nested = _findMainDart(node.children);
       if (nested != null) return nested;
     }
@@ -104,31 +124,23 @@ class _WorkspacePageState extends State<WorkspacePage> {
   }
 
   Future<void> _openFile(File file) async {
-    if (_activeFile != null && _activeFile!.path == file.path) return;
-
-    if (_activeFile != null) {
-      await _activeFile!.writeAsString(_editorController.text);
-    }
-
-    if (!_openTabs.any((f) => f.path == file.path)) {
-      _openTabs.add(file);
-    }
+    if (_activeFile?.path == file.path) return;
+    if (_activeFile != null) await _activeFile!.writeAsString(_editorController.text);
+    if (!_openTabs.any((f) => f.path == file.path)) _openTabs.add(file);
 
     final content = await file.readAsString();
     setState(() {
       _activeFile = file;
       _editorController.text = content;
     });
+    _updateCursor();
     _log('Opened: ${file.path.split("/").last}');
   }
 
   Future<void> _closeTab(File file) async {
     final index = _openTabs.indexWhere((f) => f.path == file.path);
     if (index == -1) return;
-
-    if (_activeFile?.path == file.path) {
-      await file.writeAsString(_editorController.text);
-    }
+    if (_activeFile?.path == file.path) await file.writeAsString(_editorController.text);
 
     setState(() {
       _openTabs.removeAt(index);
@@ -145,48 +157,89 @@ class _WorkspacePageState extends State<WorkspacePage> {
   }
 
   Future<void> _saveCurrentFile() async {
-    if (_activeFile != null) {
-      await _activeFile!.writeAsString(_editorController.text);
-      _log('Saved: ${_activeFile!.path.split("/").last}');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Saved ${_activeFile!.path.split("/").last}'),
-            duration: const Duration(seconds: 1),
+    if (_activeFile == null) return;
+    await _activeFile!.writeAsString(_editorController.text);
+    _log('Saved: ${_activeFile!.path.split("/").last}');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF282C34),
+          content: Text('Saved ${_activeFile!.path.split("/").last}', style: const TextStyle(color: Color(0xFF98C379))),
+          duration: const Duration(milliseconds: 800),
+        ),
+      );
+    }
+  }
+
+  Future<void> _createNewEntityPrompt({required bool isDirectory}) async {
+    final textController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF21252B),
+        title: Text(isDirectory ? 'New Directory' : 'New Dart File', style: const TextStyle(fontSize: 15)),
+        content: TextField(
+          controller: textController,
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+          decoration: InputDecoration(
+            hintText: isDirectory ? 'screens' : 'button.dart',
+            border: const OutlineInputBorder(),
           ),
-        );
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF61AFEF)),
+            onPressed: () => Navigator.pop(ctx, textController.text.trim()),
+            child: const Text('Create', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
+
+    if (name != null && name.isNotEmpty) {
+      final root = await _repo.workspaceDir;
+      final targetPath = '${root.path}/demo_app/lib/$name';
+      if (isDirectory) {
+        await Directory(targetPath).create(recursive: true);
+        _log('Created folder: $name');
+      } else {
+        final file = File(targetPath);
+        await file.create(recursive: true);
+        _log('Created file: $name');
+        await _openFile(file);
       }
+      final tree = await _repo.loadFileTree();
+      setState(() => _files = tree);
     }
   }
 
   Future<void> _showBuildAndInstallDialog() async {
-    final tokenController = TextEditingController();
+    final tokenController = TextEditingController(text: _savedPatToken);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF21252B),
         title: const Row(
           children: [
-            Icon(Icons.cloud_sync_outlined, color: Colors.cyanAccent),
+            Icon(Icons.cloud_sync_outlined, color: Color(0xFF61AFEF), size: 20),
             SizedBox(width: 8),
-            Text('Sync & Build APK'),
+            Text('Remote Build & Install', style: TextStyle(fontSize: 16)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '1. Commits local files to GitHub\n2. Dispatches CI build\n3. Downloads & installs APK automatically.',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+              'Syncs code to GitHub, compiles ARM64 APK, and launches the installer.',
+              style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF)),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             TextField(
               controller: tokenController,
-              decoration: const InputDecoration(
-                labelText: 'GitHub PAT Token',
-                hintText: 'ghp_...',
-                border: OutlineInputBorder(),
-              ),
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              decoration: const InputDecoration(labelText: 'GitHub PAT Token', border: OutlineInputBorder(), isDense: true),
               obscureText: true,
             ),
           ],
@@ -194,53 +247,49 @@ class _WorkspacePageState extends State<WorkspacePage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF98C379)),
             onPressed: () async {
               final token = tokenController.text.trim();
               if (token.isEmpty) return;
+              await _saveToken(token);
               Navigator.pop(ctx);
 
-              final service = GitHubBuildService(
-                owner: 'ArkaneelRoy',
-                repo: 'DashIDE',
-                token: token,
-              );
-
-              setState(() => _showConsole = true);
+              final service = GitHubBuildService(owner: 'ArkaneelRoy', repo: 'DashIDE', token: token);
+              setState(() {
+                _activePanel = 2;
+                _buildStatus = 'Syncing...';
+              });
 
               try {
                 if (_activeFile != null) await _saveCurrentFile();
-
                 final root = await _repo.workspaceDir;
-                final projectDir = Directory('${root.path}/demo_app');
-
-                _log('Starting source sync to GitHub...');
                 await service.syncWorkspaceFiles(
-                  localDir: projectDir,
+                  localDir: Directory('${root.path}/demo_app'),
                   onProgress: (msg) => _log(msg),
                 );
-                _log('Source sync complete!');
 
-                _log('Dispatching GitHub Actions compilation workflow...');
-                final triggered = await service.triggerWorkflow();
-                if (!triggered) {
-                  _log('Error: Trigger failed. Check token permissions.');
+                setState(() => _buildStatus = 'Dispatching...');
+                final ok = await service.triggerWorkflow();
+                if (!ok) {
+                  setState(() => _buildStatus = 'Error');
                   return;
                 }
 
-                _log('Workflow triggered. Polling status...');
-                _pollWorkflowAndInstall(service);
+                setState(() => _buildStatus = 'Compiling...');
+                _pollWorkflow(service);
               } catch (e) {
-                _log('Error during sync/build: $e');
+                setState(() => _buildStatus = 'Failed');
+                _log('Error: $e');
               }
             },
-            child: const Text('Start Pipeline'),
+            child: const Text('Build APK', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  void _pollWorkflowAndInstall(GitHubBuildService service) {
+  void _pollWorkflow(GitHubBuildService service) {
     int attempts = 0;
     Timer.periodic(const Duration(seconds: 6), (timer) async {
       attempts++;
@@ -248,218 +297,120 @@ class _WorkspacePageState extends State<WorkspacePage> {
       if (run != null) {
         final status = run['status'];
         final conclusion = run['conclusion'];
-        _log('Build state: $status (conclusion: $conclusion)');
+        _log('CI: $status (${conclusion ?? "running"})');
 
         if (status == 'completed') {
           timer.cancel();
           if (conclusion == 'success') {
+            setState(() => _buildStatus = 'Downloading...');
             final runId = run['id'] as int;
-            _log('Fetching build artifacts...');
             final artifacts = await service.getRunArtifacts(runId);
-
             if (artifacts.isNotEmpty) {
-              final apkArtifact = artifacts.first;
-              final archiveUrl = apkArtifact['archive_download_url'] as String;
-              _log('Found artifact: ${apkArtifact["name"]}. Starting download...');
               await service.downloadAndInstallArtifact(
-                artifactDownloadUrl: archiveUrl,
+                artifactDownloadUrl: artifacts.first['archive_download_url'] as String,
                 onStatus: (msg) => _log(msg),
               );
+              setState(() => _buildStatus = 'Ready');
             } else {
-              _log('Error: No artifacts published in run.');
+              setState(() => _buildStatus = 'No Artifact');
             }
           } else {
-            _log('Cloud build completed with failure.');
+            setState(() => _buildStatus = 'Failed');
           }
         }
       }
 
       if (attempts >= 45) {
         timer.cancel();
-        _log('Polling timed out after 4.5 minutes.');
+        setState(() => _buildStatus = 'Timeout');
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.of(context).size.width < 700;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'DashIDE',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isPreviewMode ? Icons.code : Icons.visibility_outlined,
-              color: _isPreviewMode ? Colors.amberAccent : Colors.cyanAccent,
-            ),
-            tooltip: _isPreviewMode ? 'Editor' : 'Live Preview',
-            onPressed: () {
-              if (_activeFile != null) _saveCurrentFile();
-              setState(() => _isPreviewMode = !_isPreviewMode);
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.cloud_sync_outlined, color: Colors.greenAccent),
-            tooltip: 'Sync & Build APK',
-            onPressed: _showBuildAndInstallDialog,
-          ),
-          IconButton(
-            icon: Icon(
-              _showConsole ? Icons.terminal : Icons.terminal_outlined,
-              color: _showConsole ? Colors.cyanAccent : Colors.white,
-            ),
-            tooltip: 'Console',
-            onPressed: () => setState(() => _showConsole = !_showConsole),
-          ),
-          IconButton(
-            icon: const Icon(Icons.save_outlined),
-            tooltip: 'Save',
-            onPressed: _activeFile == null ? null : _saveCurrentFile,
-          ),
-        ],
-      ),
-      drawer: Drawer(
-        backgroundColor: const Color(0xFF21252B),
+      body: SafeArea(
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.only(top: 48, bottom: 12, left: 16, right: 16),
-              child: const Row(
-                children: [
-                  Icon(Icons.folder_copy_outlined, color: Colors.cyanAccent),
-                  SizedBox(width: 8),
-                  Text('Explorer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
+            IdeAppBar(
+              isPreviewMode: _isPreviewMode,
+              hasActiveFile: _activeFile != null,
+              onTogglePreview: () {
+                if (_activeFile != null) _saveCurrentFile();
+                setState(() => _isPreviewMode = !_isPreviewMode);
+              },
+              onBuildAndInstall: _showBuildAndInstallDialog,
+              onSave: _saveCurrentFile,
             ),
-            const Divider(color: Color(0xFF3B4048), height: 1),
             Expanded(
-              child: ListView(
-                children: _buildFileTreeTiles(_files),
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          if (_openTabs.isNotEmpty && !_isPreviewMode)
-            Container(
-              height: 38,
-              color: const Color(0xFF1E2227),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _openTabs.length,
-                itemBuilder: (context, index) {
-                  final file = _openTabs[index];
-                  final isSelected = _activeFile?.path == file.path;
-                  return InkWell(
-                    onTap: () => _openFile(file),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF282C34) : const Color(0xFF1E2227),
-                        border: Border(
-                          bottom: BorderSide(
-                            color: isSelected ? Colors.cyanAccent : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            file.path.split('/').last,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontFamily: 'monospace',
-                              color: isSelected ? Colors.white : Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          GestureDetector(
-                            onTap: () => _closeTab(file),
-                            child: const Icon(Icons.close, size: 14, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          Expanded(
-            child: _isPreviewMode
-                ? LivePreviewView(dartCode: _editorController.text)
-                : (_activeFile == null
-                    ? const Center(child: Text('Open a file to start editing'))
-                    : CodeEditorView(controller: _editorController)),
-          ),
-          if (_showConsole)
-            Container(
-              height: 150,
-              color: const Color(0xFF181A1F),
-              child: Column(
+              child: Row(
                 children: [
-                  Container(
-                    color: const Color(0xFF21252B),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  IdeActivityRail(
+                    activePanel: _activePanel,
+                    onPanelSelected: (panel) => setState(() => _activePanel = panel),
+                  ),
+                  if (_activePanel != 0)
+                    Container(
+                      width: isCompact ? 220 : 260,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF21252B),
+                        border: Border(right: BorderSide(color: Color(0xFF282C34))),
+                      ),
+                      child: _activePanel == 1
+                          ? IdeExplorerPanel(
+                              files: _files,
+                              activeFile: _activeFile,
+                              onFileSelected: _openFile,
+                              onNewFile: () => _createNewEntityPrompt(isDirectory: false),
+                              onNewFolder: () => _createNewEntityPrompt(isDirectory: true),
+                            )
+                          : IdeConsolePanel(
+                              logs: _consoleLogs,
+                              onClear: () => setState(() => _consoleLogs.clear()),
+                            ),
+                    ),
+                  Expanded(
+                    child: Column(
                       children: [
-                        const Text(
-                          'OUTPUT CONSOLE',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.clear_all, size: 16),
-                          onPressed: () => setState(() => _consoleLogs.clear()),
+                        if (!_isPreviewMode)
+                          IdeTabBar(
+                            openTabs: _openTabs,
+                            activeFile: _activeFile,
+                            onSelectTab: _openFile,
+                            onCloseTab: _closeTab,
+                          ),
+                        Expanded(
+                          child: _isPreviewMode
+                              ? LivePreviewView(dartCode: _editorController.text)
+                              : (_activeFile == null
+                                  ? const Center(
+                                      child: Text(
+                                        'DashIDE Workspace',
+                                        style: TextStyle(fontFamily: 'monospace', color: Color(0xFF5C6370)),
+                                      ),
+                                    )
+                                  : CodeEditorView(
+                                      controller: _editorController,
+                                      onCursorMoved: _updateCursor,
+                                    )),
                         ),
                       ],
                     ),
                   ),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(8),
-                      itemCount: _consoleLogs.length,
-                      itemBuilder: (context, idx) => Text(
-                        _consoleLogs[idx],
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: Color(0xFF98C379),
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
-        ],
+            IdeStatusBar(
+              buildStatus: _buildStatus,
+              line: _cursorLine,
+              col: _cursorCol,
+            ),
+          ],
+        ),
       ),
     );
-  }
-
-  List<Widget> _buildFileTreeTiles(List<FileNode> nodes) {
-    return nodes.map((node) {
-      if (node.isDirectory) {
-        return ExpansionTile(
-          leading: const Icon(Icons.folder_outlined, color: Colors.amberAccent),
-          title: Text(node.name, style: const TextStyle(fontSize: 14)),
-          children: _buildFileTreeTiles(node.children),
-        );
-      }
-      return ListTile(
-        leading: const Icon(Icons.insert_drive_file_outlined, color: Colors.lightBlueAccent, size: 20),
-        title: Text(node.name, style: const TextStyle(fontSize: 13, fontFamily: 'monospace')),
-        onTap: () {
-          Navigator.pop(context);
-          _openFile(node.entity as File);
-        },
-      );
-    }).toList();
   }
 }
