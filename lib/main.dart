@@ -56,11 +56,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
   List<FileNode> _files = [];
   final List<File> _openTabs = [];
   File? _activeFile;
+  String _savedFileSnapshot = '';
+  bool _isDirty = false;
 
   int _activePanel = 0;
   bool _isPreviewMode = false;
   String _savedPatToken = '';
-  final List<String> _consoleLogs = ['DashIDE core ready.'];
+  final List<String> _consoleLogs = ['DashIDE ready.'];
 
   int _cursorLine = 1;
   int _cursorCol = 1;
@@ -70,14 +72,23 @@ class _WorkspacePageState extends State<WorkspacePage> {
   void initState() {
     super.initState();
     _editorController = CodeController(text: '', language: dart);
+    _editorController.addListener(_checkDirtyState);
     _initWorkspace();
     _loadPreferences();
   }
 
   @override
   void dispose() {
+    _editorController.removeListener(_checkDirtyState);
     _editorController.dispose();
     super.dispose();
+  }
+
+  void _checkDirtyState() {
+    final dirty = _editorController.text != _savedFileSnapshot;
+    if (dirty != _isDirty) {
+      setState(() => _isDirty = dirty);
+    }
   }
 
   Future<void> _loadPreferences() async {
@@ -125,13 +136,15 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   Future<void> _openFile(File file) async {
     if (_activeFile?.path == file.path) return;
-    if (_activeFile != null) await _activeFile!.writeAsString(_editorController.text);
+    if (_activeFile != null && _isDirty) await _saveCurrentFile();
     if (!_openTabs.any((f) => f.path == file.path)) _openTabs.add(file);
 
     final content = await file.readAsString();
+    _savedFileSnapshot = content;
     setState(() {
       _activeFile = file;
       _editorController.text = content;
+      _isDirty = false;
     });
     _updateCursor();
     _log('Opened: ${file.path.split("/").last}');
@@ -140,7 +153,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   Future<void> _closeTab(File file) async {
     final index = _openTabs.indexWhere((f) => f.path == file.path);
     if (index == -1) return;
-    if (_activeFile?.path == file.path) await file.writeAsString(_editorController.text);
+    if (_activeFile?.path == file.path && _isDirty) await file.writeAsString(_editorController.text);
 
     setState(() {
       _openTabs.removeAt(index);
@@ -151,6 +164,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
         } else {
           _activeFile = null;
           _editorController.text = '';
+          _savedFileSnapshot = '';
+          _isDirty = false;
         }
       }
     });
@@ -159,6 +174,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
   Future<void> _saveCurrentFile() async {
     if (_activeFile == null) return;
     await _activeFile!.writeAsString(_editorController.text);
+    _savedFileSnapshot = _editorController.text;
+    setState(() => _isDirty = false);
     _log('Saved: ${_activeFile!.path.split("/").last}');
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -380,6 +397,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                           IdeTabBar(
                             openTabs: _openTabs,
                             activeFile: _activeFile,
+                            isDirty: _isDirty,
                             onSelectTab: _openFile,
                             onCloseTab: _closeTab,
                           ),

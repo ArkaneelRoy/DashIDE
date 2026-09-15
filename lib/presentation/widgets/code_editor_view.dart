@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
+import '../../core/editor_utils.dart';
 
 class CodeEditorView extends StatefulWidget {
   final CodeController controller;
@@ -48,6 +49,56 @@ class _CodeEditorViewState extends State<CodeEditorView> {
     widget.controller.value = TextEditingValue(
       text: newText,
       selection: TextSelection.collapsed(offset: start + symbol.length),
+    );
+  }
+
+  void _formatCode() {
+    final formatted = EditorUtils.formatDartCode(widget.controller.text);
+    widget.controller.value = TextEditingValue(
+      text: formatted,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+  }
+
+  void _showSnippetPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF21252B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text(
+                'INSERT SNIPPET',
+                style: TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFABB2BF),
+                ),
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFF282C34)),
+            ...EditorUtils.snippets.entries.map(
+              (entry) => ListTile(
+                dense: true,
+                leading: const Icon(Icons.code_outlined, color: Color(0xFF61AFEF), size: 18),
+                title: Text(entry.key, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _insertText(entry.value);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -106,7 +157,6 @@ class _CodeEditorViewState extends State<CodeEditorView> {
       '{', '}', '(', ')', ';', '"', "'", '=', '=>', 'Tab', '//', '<', '>', '.'
     ];
 
-    // Push the keyboard accessory bar directly above the software keyboard smoothly
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -155,7 +205,7 @@ class _CodeEditorViewState extends State<CodeEditorView> {
               ),
             ),
 
-          // Isolated Editor Buffer (no extra SingleChildScrollView wrapper)
+          // Code Field
           Expanded(
             child: RepaintBoundary(
               child: CodeTheme(
@@ -181,7 +231,7 @@ class _CodeEditorViewState extends State<CodeEditorView> {
             ),
           ),
 
-          // Accessory Bar
+          // Lower Accessory Toolbar
           Container(
             height: 38,
             decoration: const BoxDecoration(
@@ -191,34 +241,28 @@ class _CodeEditorViewState extends State<CodeEditorView> {
             child: Row(
               children: [
                 IconButton(
+                  icon: const Icon(Icons.auto_fix_high_outlined, size: 16, color: Color(0xFF61AFEF)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32),
+                  tooltip: 'Format Code',
+                  onPressed: _formatCode,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.data_object_outlined, size: 16, color: Color(0xFFE5C07B)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32),
+                  tooltip: 'Snippets',
+                  onPressed: _showSnippetPicker,
+                ),
+                IconButton(
                   icon: Icon(
                     Icons.search,
                     size: 16,
                     color: _showFindBar ? const Color(0xFF61AFEF) : const Color(0xFF5C6370),
                   ),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36),
+                  constraints: const BoxConstraints(minWidth: 32),
                   onPressed: () => setState(() => _showFindBar = !_showFindBar),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.remove, size: 14, color: Color(0xFF5C6370)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 26),
-                  onPressed: () {
-                    if (_fontSize > 9) setState(() => _fontSize -= 0.5);
-                  },
-                ),
-                Text(
-                  '${_fontSize.toInt()}pt',
-                  style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Color(0xFF5C6370)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add, size: 14, color: Color(0xFF5C6370)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 26),
-                  onPressed: () {
-                    if (_fontSize < 24) setState(() => _fontSize += 0.5);
-                  },
                 ),
                 Container(width: 1, height: 18, color: const Color(0xFF282C34), margin: const EdgeInsets.symmetric(horizontal: 4)),
                 Expanded(

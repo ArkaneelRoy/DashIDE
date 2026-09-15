@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 class IdeTabBar extends StatelessWidget {
   final List<File> openTabs;
   final File? activeFile;
+  final bool isDirty;
   final Function(File) onSelectTab;
   final Function(File) onCloseTab;
 
@@ -11,6 +12,7 @@ class IdeTabBar extends StatelessWidget {
     super.key,
     required this.openTabs,
     required this.activeFile,
+    this.isDirty = false,
     required this.onSelectTab,
     required this.onCloseTab,
   });
@@ -56,6 +58,16 @@ class IdeTabBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  if (isSelected && isDirty)
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE5C07B),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   GestureDetector(
                     onTap: () => onCloseTab(file),
                     child: const Icon(Icons.close, size: 12, color: Color(0xFF5C6370)),
