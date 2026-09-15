@@ -27,11 +27,11 @@ jobs:
       - name: Fetch Packages
         run: flutter pub get
 
-      - name: Build Debug APK
-        run: flutter build apk --debug --android-skip-build-dependency-validation --target-platform=android-arm,android-arm64
+      - name: Build Debug APK (ARM64 only)
+        run: flutter build apk --debug --android-skip-build-dependency-validation --target-platform=android-arm64
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DashIDE-debug-apk
+          name: DashIDE-arm64-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
