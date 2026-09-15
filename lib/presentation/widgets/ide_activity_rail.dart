@@ -58,13 +58,18 @@ class IdeActivityRail extends StatelessWidget {
             tooltip: 'Explorer',
           ),
           _buildRailIcon(
-            icon: Icons.search,
+            icon: Icons.alt_route_rounded,
             index: 2,
-            tooltip: 'Global Workspace Search',
+            tooltip: 'Source Control (Git)',
+          ),
+          _buildRailIcon(
+            icon: Icons.search,
+            index: 3,
+            tooltip: 'Workspace Search',
           ),
           _buildRailIcon(
             icon: Icons.terminal_outlined,
-            index: 3,
+            index: 4,
             tooltip: 'Console Logs',
           ),
           Tooltip(

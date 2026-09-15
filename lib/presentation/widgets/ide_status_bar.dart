@@ -14,6 +14,26 @@ class IdeStatusBar extends StatelessWidget {
     required this.col,
   });
 
+  Color get _statusColor {
+    switch (buildStatus) {
+      case 'Ready':
+      case 'Idle':
+        return const Color(0xFF98C379); // Green
+      case 'Syncing...':
+      case 'Compiling...':
+      case 'Downloading...':
+        return const Color(0xFF61AFEF); // Cyan
+      case 'Timeout':
+      case 'Dispatching...':
+        return const Color(0xFFE5C07B); // Yellow
+      case 'Failed':
+      case 'Error':
+      case 'No Artifact':
+      default:
+        return const Color(0xFFE06C75); // Red
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -29,7 +49,7 @@ class IdeStatusBar extends StatelessWidget {
           const SizedBox(width: 4),
           Text(branch, style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Color(0xFF5C6370))),
           const SizedBox(width: 14),
-          const Icon(Icons.circle, size: 7, color: Color(0xFF98C379)),
+          Icon(Icons.circle, size: 7, color: _statusColor),
           const SizedBox(width: 5),
           Text(buildStatus, style: const TextStyle(fontSize: 10, fontFamily: 'monospace', color: Color(0xFF5C6370))),
           const Spacer(),

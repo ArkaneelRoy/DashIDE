@@ -4,11 +4,13 @@ import '../../data/repositories/github_build_service.dart';
 
 class PipelineController {
   final GitHubBuildService service;
+  final String target;
   final Function(String) onLog;
   final Function(String) onStatusChanged;
 
   PipelineController({
     required this.service,
+    this.target = 'android-arm64',
     required this.onLog,
     required this.onStatusChanged,
   });
@@ -23,15 +25,17 @@ class PipelineController {
       );
 
       onStatusChanged('Dispatching...');
-      onLog('Dispatching GitHub Actions workflow...');
-      final ok = await service.triggerWorkflow();
+      onLog('Dispatching build for target: $target...');
+      final ok = await service.triggerWorkflow(target: target);
       if (!ok) {
         onStatusChanged('Error');
-        onLog('Trigger failed. Check token permissions.');
+        onLog('Workflow trigger failed. Check token permissions.');
         return;
       }
 
       onStatusChanged('Compiling...');
+      onLog('Build job dispatched. Polling runner status...');
+      await Future.delayed(const Duration(seconds: 4));
       _pollRun();
     } catch (e) {
       onStatusChanged('Failed');
@@ -41,13 +45,16 @@ class PipelineController {
 
   void _pollRun() {
     int attempts = 0;
+    const maxAttempts = 90;
+
     Timer.periodic(const Duration(seconds: 6), (timer) async {
       attempts++;
       final run = await service.getLatestRun();
       if (run != null) {
         final status = run['status'];
         final conclusion = run['conclusion'];
-        onLog('CI Run: $status (${conclusion ?? "active"})');
+        final elapsed = (attempts * 6) ~/ 60;
+        onLog('CI ($target): $status (${conclusion ?? "running, ~${elapsed}m"})');
 
         if (status == 'completed') {
           timer.cancel();
@@ -58,6 +65,7 @@ class PipelineController {
             if (artifacts.isNotEmpty) {
               await service.downloadAndInstallArtifact(
                 artifactDownloadUrl: artifacts.first['archive_download_url'] as String,
+                target: target,
                 onStatus: onLog,
               );
               onStatusChanged('Ready');
@@ -70,7 +78,7 @@ class PipelineController {
         }
       }
 
-      if (attempts >= 45) {
+      if (attempts >= maxAttempts) {
         timer.cancel();
         onStatusChanged('Timeout');
       }

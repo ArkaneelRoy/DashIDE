@@ -51,6 +51,46 @@ class IdeDialogs {
     );
   }
 
+  static Future<String?> showRepoSelectorDialog(BuildContext context, String currentRepo) {
+    final controller = TextEditingController(text: currentRepo);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF21252B),
+        title: const Row(
+          children: [
+            Icon(Icons.hub_outlined, color: Color(0xFF61AFEF), size: 18),
+            SizedBox(width: 8),
+            Text('Switch Target Repo', style: TextStyle(fontSize: 15)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter owner/repository (e.g. ArkaneelRoy/my_app). Will be created automatically if missing.',
+              style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF61AFEF)),
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Apply', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
+  }
+
   static void showSettingsDialog({
     required BuildContext context,
     required double initialFontSize,
@@ -133,43 +173,82 @@ class IdeDialogs {
     );
   }
 
-  static Future<String?> showBuildDialog(BuildContext context, String initialToken) {
-    final controller = TextEditingController(text: initialToken);
-    return showDialog<String>(
+  static Future<Map<String, String>?> showBuildDialog(BuildContext context, String initialToken) {
+    final tokenController = TextEditingController(text: initialToken);
+    String selectedTarget = 'android-arm64';
+
+    final targets = {
+      'android-arm64': 'Android (ARM64 APK)',
+      'android-armv7': 'Android (ARMv7 32-bit APK)',
+      'linux': 'Linux Desktop (tar.gz)',
+      'windows': 'Windows Desktop (.zip)',
+      'macos': 'macOS Desktop (.zip)',
+    };
+
+    return showDialog<Map<String, String>>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF21252B),
-        title: const Row(
-          children: [
-            Icon(Icons.cloud_sync_outlined, color: Color(0xFF61AFEF), size: 20),
-            SizedBox(width: 8),
-            Text('Remote Build & Install', style: TextStyle(fontSize: 16)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Syncs local edits to GitHub, executes cloud ARM64 build, and installs APK.',
-              style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF)),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              decoration: const InputDecoration(labelText: 'GitHub PAT', border: OutlineInputBorder(), isDense: true),
-              obscureText: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF98C379)),
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Build APK', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF21252B),
+          title: const Row(
+            children: [
+              Icon(Icons.rocket_launch_outlined, color: Color(0xFF61AFEF), size: 20),
+              SizedBox(width: 8),
+              Text('Cloud Build Pipeline', style: TextStyle(fontSize: 16)),
+            ],
           ),
-        ],
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Target Platform', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2227),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFF353B45)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    dropdownColor: const Color(0xFF21252B),
+                    value: selectedTarget,
+                    items: targets.entries
+                        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 12.5))))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) setDialogState(() => selectedTarget = v);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('GitHub Personal Access Token', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
+              const SizedBox(height: 6),
+              TextField(
+                controller: tokenController,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                decoration: const InputDecoration(hintText: 'ghp_...', border: OutlineInputBorder(), isDense: true),
+                obscureText: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF98C379)),
+              onPressed: () {
+                final token = tokenController.text.trim();
+                if (token.isNotEmpty) {
+                  Navigator.pop(ctx, {'token': token, 'target': selectedTarget});
+                }
+              },
+              child: const Text('Dispatch Build', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }

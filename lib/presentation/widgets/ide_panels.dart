@@ -78,12 +78,7 @@ class IdeExplorerPanel extends StatelessWidget {
             children: [
               const Text(
                 'EXPLORER',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
-                  color: Color(0xFFABB2BF),
-                ),
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1, color: Color(0xFFABB2BF)),
               ),
               Row(
                 children: [
@@ -105,6 +100,114 @@ class IdeExplorerPanel extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.symmetric(vertical: 4),
             children: _buildTree(context, files),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class IdeGitPanel extends StatefulWidget {
+  final String activeRepo;
+  final bool isBusy;
+  final Function(String message) onCommitAndPush;
+  final VoidCallback onChangeRepo;
+
+  const IdeGitPanel({
+    super.key,
+    required this.activeRepo,
+    required this.isBusy,
+    required this.onCommitAndPush,
+    required this.onChangeRepo,
+  });
+
+  @override
+  State<IdeGitPanel> createState() => _IdeGitPanelState();
+}
+
+class _IdeGitPanelState extends State<IdeGitPanel> {
+  final TextEditingController _msgController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: Color(0xFF282C34))),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'SOURCE CONTROL',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1, color: Color(0xFFABB2BF)),
+              ),
+              InkWell(
+                onTap: widget.onChangeRepo,
+                child: const Icon(Icons.swap_horiz, size: 16, color: Color(0xFF61AFEF)),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.hub_outlined, size: 13, color: Color(0xFFE5C07B)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.activeRepo,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFFABB2BF)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _msgController,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                decoration: InputDecoration(
+                  hintText: 'Commit message...',
+                  hintStyle: const TextStyle(fontSize: 11, color: Colors.grey),
+                  isDense: true,
+                  filled: true,
+                  fillColor: const Color(0xFF1E2227),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF61AFEF),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  icon: widget.isBusy
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : const Icon(Icons.cloud_upload_outlined, size: 16, color: Colors.black),
+                  label: Text(
+                    widget.isBusy ? 'Pushing...' : 'Commit & Push',
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  onPressed: widget.isBusy
+                      ? null
+                      : () {
+                          final msg = _msgController.text.trim();
+                          widget.onCommitAndPush(msg.isEmpty ? 'Update from DashIDE' : msg);
+                          _msgController.clear();
+                        },
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -135,7 +238,7 @@ class _IdeSearchPanelState extends State<IdeSearchPanel> {
   List<SearchResult> _results = [];
   bool _searching = false;
 
-  Future<void> _performSearch(String query) async {
+  void _performSearch(String query) {
     final q = query.trim();
     if (q.isEmpty) {
       setState(() => _results = []);
@@ -194,7 +297,7 @@ class _IdeSearchPanelState extends State<IdeSearchPanel> {
                   controller: _queryController,
                   style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white),
                   decoration: InputDecoration(
-                    hintText: 'Search text in project...',
+                    hintText: 'Search text...',
                     hintStyle: const TextStyle(color: Colors.grey, fontSize: 11),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -208,8 +311,7 @@ class _IdeSearchPanelState extends State<IdeSearchPanel> {
             ],
           ),
         ),
-        if (_searching)
-          const LinearProgressIndicator(minHeight: 2, color: Color(0xFF61AFEF)),
+        if (_searching) const LinearProgressIndicator(minHeight: 2, color: Color(0xFF61AFEF)),
         Expanded(
           child: ListView.builder(
             itemCount: _results.length,

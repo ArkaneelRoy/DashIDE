@@ -59,9 +59,12 @@ class _WorkspacePageState extends State<WorkspacePage> {
   String _savedFileSnapshot = '';
   bool _isDirty = false;
 
-  int _activePanel = 0; // 0: None, 1: Explorer, 2: Search, 3: Console
+  int _activePanel = 0;
   bool _isPreviewMode = false;
   String _savedPat = '';
+  String _targetRepo = 'ArkaneelRoy/DashIDE';
+  bool _isGitBusy = false;
+
   final List<String> _consoleLogs = ['DashIDE workspace ready.'];
 
   int _cursorLine = 1;
@@ -103,6 +106,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _savedPat = prefs.getString('github_pat_token') ?? '';
+      _targetRepo = prefs.getString('target_repo') ?? 'ArkaneelRoy/DashIDE';
       _fontSize = prefs.getDouble('editor_font_size') ?? 13.0;
       _theme = prefs.getString('editor_theme') ?? 'Atom One Dark';
     });
@@ -125,6 +129,49 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   void _log(String msg) {
     setState(() => _consoleLogs.add('[${DateTime.now().toIso8601String().substring(11, 19)}] $msg'));
+  }
+
+  GitHubBuildService _createService(String token) {
+    final parts = _targetRepo.split('/');
+    final owner = parts.isNotEmpty ? parts[0] : 'ArkaneelRoy';
+    final repo = parts.length > 1 ? parts[1] : 'DashIDE';
+    return GitHubBuildService(owner: owner, repo: repo, token: token);
+  }
+
+  Future<void> _commitAndPush(String message) async {
+    if (_savedPat.isEmpty) {
+      _log('Error: Personal Access Token required. Open settings or build dialog.');
+      return;
+    }
+
+    setState(() => _isGitBusy = true);
+    try {
+      if (_activeFile != null) await _saveFile();
+      final root = await _repo.workspaceDir;
+      final projectDir = Directory('${root.path}/demo_app');
+      final service = _createService(_savedPat);
+
+      _log('Starting Git commit & push: "$message"...');
+      await service.syncWorkspaceFiles(
+        localDir: projectDir,
+        onProgress: _log,
+      );
+      _log('Commit & push completed.');
+    } catch (e) {
+      _log('Git push failed: $e');
+    } finally {
+      setState(() => _isGitBusy = false);
+    }
+  }
+
+  Future<void> _switchTargetRepo() async {
+    final chosen = await IdeDialogs.showRepoSelectorDialog(context, _targetRepo);
+    if (chosen != null && chosen.contains('/')) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('target_repo', chosen);
+      setState(() => _targetRepo = chosen);
+      _log('Switched target repository to: $chosen');
+    }
   }
 
   Future<void> _openFile(File file) async {
@@ -201,21 +248,27 @@ class _WorkspacePageState extends State<WorkspacePage> {
   }
 
   Future<void> _triggerPipeline() async {
-    final token = await IdeDialogs.showBuildDialog(context, _savedPat);
-    if (token == null || token.isEmpty) return;
+    final result = await IdeDialogs.showBuildDialog(context, _savedPat);
+    if (result == null) return;
+
+    final token = result['token'] ?? '';
+    final target = result['target'] ?? 'android-arm64';
+    if (token.isEmpty) return;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('github_pat_token', token);
     setState(() {
       _savedPat = token;
-      _activePanel = 3;
+      _activePanel = 4;
     });
 
     if (_activeFile != null) await _saveFile();
     final root = await _repo.workspaceDir;
-    final service = GitHubBuildService(owner: 'ArkaneelRoy', repo: 'DashIDE', token: token);
+    final service = _createService(token);
+
     final runner = PipelineController(
       service: service,
+      target: target,
       onLog: _log,
       onStatusChanged: (status) => setState(() => _buildStatus = status),
     );
@@ -315,7 +368,12 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 ],
               ),
             ),
-            IdeStatusBar(buildStatus: _buildStatus, line: _cursorLine, col: _cursorCol),
+            IdeStatusBar(
+              branch: _targetRepo.split('/').last,
+              buildStatus: _buildStatus,
+              line: _cursorLine,
+              col: _cursorCol,
+            ),
           ],
         ),
       ),
@@ -334,8 +392,15 @@ class _WorkspacePageState extends State<WorkspacePage> {
           onNewFolder: () => _newEntity(isDirectory: true),
         );
       case 2:
-        return IdeSearchPanel(files: _files, onOpenFile: _openFile);
+        return IdeGitPanel(
+          activeRepo: _targetRepo,
+          isBusy: _isGitBusy,
+          onCommitAndPush: _commitAndPush,
+          onChangeRepo: _switchTargetRepo,
+        );
       case 3:
+        return IdeSearchPanel(files: _files, onOpenFile: _openFile);
+      case 4:
       default:
         return IdeConsolePanel(logs: _consoleLogs, onClear: () => setState(() => _consoleLogs.clear()));
     }
