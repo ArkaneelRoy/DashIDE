@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
@@ -6,6 +7,7 @@ import 'data/models/file_node.dart';
 import 'data/repositories/workspace_repository.dart';
 import 'data/repositories/github_build_service.dart';
 import 'presentation/widgets/code_editor_view.dart';
+import 'presentation/widgets/live_preview_view.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +49,10 @@ class _WorkspacePageState extends State<WorkspacePage> {
   final List<File> _openTabs = [];
   File? _activeFile;
 
+  final List<String> _consoleLogs = ['DashIDE workspace initialized.'];
+  bool _showConsole = false;
+  bool _isPreviewMode = false;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +67,12 @@ class _WorkspacePageState extends State<WorkspacePage> {
   void dispose() {
     _editorController.dispose();
     super.dispose();
+  }
+
+  void _log(String message) {
+    setState(() {
+      _consoleLogs.add('[${DateTime.now().toIso8601String().substring(11, 19)}] $message');
+    });
   }
 
   Future<void> _initWorkspace() async {
@@ -107,6 +119,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
       _activeFile = file;
       _editorController.text = content;
     });
+    _log('Opened: ${file.path.split("/").last}');
   }
 
   Future<void> _closeTab(File file) async {
@@ -134,6 +147,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   Future<void> _saveCurrentFile() async {
     if (_activeFile != null) {
       await _activeFile!.writeAsString(_editorController.text);
+      _log('Saved: ${_activeFile!.path.split("/").last}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -145,101 +159,16 @@ class _WorkspacePageState extends State<WorkspacePage> {
     }
   }
 
-  Future<void> _createNewFilePrompt() async {
-    final textController = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New File'),
-        content: TextField(
-          controller: textController,
-          decoration: const InputDecoration(hintText: 'widget_view.dart'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, textController.text.trim()),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-
-    if (name != null && name.isNotEmpty) {
-      final root = await _repo.workspaceDir;
-      final newFile = File('${root.path}/demo_app/lib/$name');
-      await newFile.create(recursive: true);
-      await _refreshFileTree();
-      await _openFile(newFile);
-    }
-  }
-
-  Future<void> _showFileActionDialog(File file) async {
-    final fileName = file.path.split('/').last;
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: const Color(0xFF282C34),
-      builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline),
-              title: const Text('Rename'),
-              onTap: () => Navigator.pop(ctx, 'rename'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
-              title: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
-              onTap: () => Navigator.pop(ctx, 'delete'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (action == 'delete') {
-      await _closeTab(file);
-      await file.delete();
-      await _refreshFileTree();
-    } else if (action == 'rename') {
-      final textController = TextEditingController(text: fileName);
-      final newName = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Rename File'),
-          content: TextField(controller: textController, autofocus: true),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, textController.text.trim()),
-              child: const Text('Rename'),
-            ),
-          ],
-        ),
-      );
-
-      if (newName != null && newName.isNotEmpty && newName != fileName) {
-        final newPath = file.parent.path + '/' + newName;
-        await file.rename(newPath);
-        await _refreshFileTree();
-        if (_activeFile?.path == file.path) {
-          await _openFile(File(newPath));
-        }
-      }
-    }
-  }
-
-  Future<void> _showBuildDialog() async {
+  Future<void> _showBuildAndInstallDialog() async {
     final tokenController = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.cloud_upload_outlined, color: Colors.cyanAccent),
+            Icon(Icons.cloud_sync_outlined, color: Colors.cyanAccent),
             SizedBox(width: 8),
-            Text('Cloud APK Build'),
+            Text('Sync & Build APK'),
           ],
         ),
         content: Column(
@@ -247,7 +176,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Triggers GitHub Actions to compile this project into an ARM64 APK artifact.',
+              '1. Commits local files to GitHub\n2. Dispatches CI build\n3. Downloads & installs APK automatically.',
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 12),
@@ -276,29 +205,80 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 token: token,
               );
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Dispatching GitHub Actions build...')),
-              );
+              setState(() => _showConsole = true);
 
-              final success = await service.triggerWorkflow();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success
-                          ? 'Build triggered! Check GitHub Actions tab.'
-                          : 'Build trigger failed. Check token permissions.',
-                    ),
-                    backgroundColor: success ? Colors.green[800] : Colors.red[800],
-                  ),
+              try {
+                if (_activeFile != null) await _saveCurrentFile();
+
+                final root = await _repo.workspaceDir;
+                final projectDir = Directory('${root.path}/demo_app');
+
+                _log('Starting source sync to GitHub...');
+                await service.syncWorkspaceFiles(
+                  localDir: projectDir,
+                  onProgress: (msg) => _log(msg),
                 );
+                _log('Source sync complete!');
+
+                _log('Dispatching GitHub Actions compilation workflow...');
+                final triggered = await service.triggerWorkflow();
+                if (!triggered) {
+                  _log('Error: Trigger failed. Check token permissions.');
+                  return;
+                }
+
+                _log('Workflow triggered. Polling status...');
+                _pollWorkflowAndInstall(service);
+              } catch (e) {
+                _log('Error during sync/build: $e');
               }
             },
-            child: const Text('Trigger Build'),
+            child: const Text('Start Pipeline'),
           ),
         ],
       ),
     );
+  }
+
+  void _pollWorkflowAndInstall(GitHubBuildService service) {
+    int attempts = 0;
+    Timer.periodic(const Duration(seconds: 6), (timer) async {
+      attempts++;
+      final run = await service.getLatestRun();
+      if (run != null) {
+        final status = run['status'];
+        final conclusion = run['conclusion'];
+        _log('Build state: $status (conclusion: $conclusion)');
+
+        if (status == 'completed') {
+          timer.cancel();
+          if (conclusion == 'success') {
+            final runId = run['id'] as int;
+            _log('Fetching build artifacts...');
+            final artifacts = await service.getRunArtifacts(runId);
+
+            if (artifacts.isNotEmpty) {
+              final apkArtifact = artifacts.first;
+              final archiveUrl = apkArtifact['archive_download_url'] as String;
+              _log('Found artifact: ${apkArtifact["name"]}. Starting download...');
+              await service.downloadAndInstallArtifact(
+                artifactDownloadUrl: archiveUrl,
+                onStatus: (msg) => _log(msg),
+              );
+            } else {
+              _log('Error: No artifacts published in run.');
+            }
+          } else {
+            _log('Cloud build completed with failure.');
+          }
+        }
+      }
+
+      if (attempts >= 45) {
+        timer.cancel();
+        _log('Polling timed out after 4.5 minutes.');
+      }
+    });
   }
 
   @override
@@ -311,18 +291,32 @@ class _WorkspacePageState extends State<WorkspacePage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.play_circle_outline, color: Colors.greenAccent),
-            tooltip: 'Cloud Build APK',
-            onPressed: _showBuildDialog,
+            icon: Icon(
+              _isPreviewMode ? Icons.code : Icons.visibility_outlined,
+              color: _isPreviewMode ? Colors.amberAccent : Colors.cyanAccent,
+            ),
+            tooltip: _isPreviewMode ? 'Editor' : 'Live Preview',
+            onPressed: () {
+              if (_activeFile != null) _saveCurrentFile();
+              setState(() => _isPreviewMode = !_isPreviewMode);
+            },
           ),
           IconButton(
-            icon: const Icon(Icons.note_add_outlined),
-            tooltip: 'New File',
-            onPressed: _createNewFilePrompt,
+            icon: const Icon(Icons.cloud_sync_outlined, color: Colors.greenAccent),
+            tooltip: 'Sync & Build APK',
+            onPressed: _showBuildAndInstallDialog,
+          ),
+          IconButton(
+            icon: Icon(
+              _showConsole ? Icons.terminal : Icons.terminal_outlined,
+              color: _showConsole ? Colors.cyanAccent : Colors.white,
+            ),
+            tooltip: 'Console',
+            onPressed: () => setState(() => _showConsole = !_showConsole),
           ),
           IconButton(
             icon: const Icon(Icons.save_outlined),
-            tooltip: 'Save Current File',
+            tooltip: 'Save',
             onPressed: _activeFile == null ? null : _saveCurrentFile,
           ),
         ],
@@ -332,16 +326,12 @@ class _WorkspacePageState extends State<WorkspacePage> {
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.only(top: 48, bottom: 16, left: 16, right: 16),
-              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.only(top: 48, bottom: 12, left: 16, right: 16),
               child: const Row(
                 children: [
-                  Icon(Icons.terminal, color: Colors.cyanAccent),
+                  Icon(Icons.folder_copy_outlined, color: Colors.cyanAccent),
                   SizedBox(width: 8),
-                  Text(
-                    'DashIDE Explorer',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+                  Text('Explorer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -356,8 +346,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
       ),
       body: Column(
         children: [
-          // Open tabs bar
-          if (_openTabs.isNotEmpty)
+          if (_openTabs.isNotEmpty && !_isPreviewMode)
             Container(
               height: 38,
               color: const Color(0xFF1E2227),
@@ -402,13 +391,53 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 },
               ),
             ),
-
-          // Code editor view
           Expanded(
-            child: _activeFile == null
-                ? const Center(child: Text('Select or open a file to start editing'))
-                : CodeEditorView(controller: _editorController),
+            child: _isPreviewMode
+                ? LivePreviewView(dartCode: _editorController.text)
+                : (_activeFile == null
+                    ? const Center(child: Text('Open a file to start editing'))
+                    : CodeEditorView(controller: _editorController)),
           ),
+          if (_showConsole)
+            Container(
+              height: 150,
+              color: const Color(0xFF181A1F),
+              child: Column(
+                children: [
+                  Container(
+                    color: const Color(0xFF21252B),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'OUTPUT CONSOLE',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.clear_all, size: 16),
+                          onPressed: () => setState(() => _consoleLogs.clear()),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: _consoleLogs.length,
+                      itemBuilder: (context, idx) => Text(
+                        _consoleLogs[idx],
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: Color(0xFF98C379),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -430,7 +459,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
           Navigator.pop(context);
           _openFile(node.entity as File);
         },
-        onLongPress: () => _showFileActionDialog(node.entity as File),
       );
     }).toList();
   }
