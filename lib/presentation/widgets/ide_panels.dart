@@ -21,7 +21,8 @@ class IdeExplorerPanel extends StatelessWidget {
   List<Widget> _buildTree(BuildContext context, List<FileNode> nodes) {
     return nodes.map((node) {
       if (node.isDirectory) {
-        return ExpansionTile(initiallyExpanded: true,
+        return ExpansionTile(
+          initiallyExpanded: true,
           dense: true,
           tilePadding: const EdgeInsets.symmetric(horizontal: 8),
           leading: const Icon(Icons.folder_outlined, size: 16, color: Color(0xFFE5C07B)),
@@ -90,6 +91,131 @@ class IdeExplorerPanel extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.symmetric(vertical: 4),
             children: _buildTree(context, files),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class SearchResult {
+  final File file;
+  final int lineNumber;
+  final String lineText;
+
+  SearchResult({required this.file, required this.lineNumber, required this.lineText});
+}
+
+class IdeSearchPanel extends StatefulWidget {
+  final List<FileNode> files;
+  final Function(File) onOpenFile;
+
+  const IdeSearchPanel({super.key, required this.files, required this.onOpenFile});
+
+  @override
+  State<IdeSearchPanel> createState() => _IdeSearchPanelState();
+}
+
+class _IdeSearchPanelState extends State<IdeSearchPanel> {
+  final TextEditingController _queryController = TextEditingController();
+  List<SearchResult> _results = [];
+  bool _searching = false;
+
+  Future<void> _performSearch(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) {
+      setState(() => _results = []);
+      return;
+    }
+
+    setState(() => _searching = true);
+    final results = <SearchResult>[];
+
+    void searchNodes(List<FileNode> nodes) {
+      for (final node in nodes) {
+        if (!node.isDirectory) {
+          final file = node.entity as File;
+          try {
+            final lines = file.readAsLinesSync();
+            for (int i = 0; i < lines.length; i++) {
+              if (lines[i].contains(q)) {
+                results.add(SearchResult(file: file, lineNumber: i + 1, lineText: lines[i].trim()));
+              }
+            }
+          } catch (_) {}
+        } else {
+          searchNodes(node.children);
+        }
+      }
+    }
+
+    searchNodes(widget.files);
+    setState(() {
+      _results = results;
+      _searching = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: Color(0xFF282C34))),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'WORKSPACE SEARCH',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1, color: Color(0xFFABB2BF)),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 28,
+                child: TextField(
+                  controller: _queryController,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Search text in project...',
+                    hintStyle: const TextStyle(color: Colors.grey, fontSize: 11),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    filled: true,
+                    fillColor: const Color(0xFF1E2227),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+                  ),
+                  onSubmitted: _performSearch,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_searching)
+          const LinearProgressIndicator(minHeight: 2, color: Color(0xFF61AFEF)),
+        Expanded(
+          child: ListView.builder(
+            itemCount: _results.length,
+            itemBuilder: (context, index) {
+              final item = _results[index];
+              return ListTile(
+                dense: true,
+                title: Text(
+                  '${item.file.path.split("/").last}:${item.lineNumber}',
+                  style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Color(0xFF61AFEF)),
+                ),
+                subtitle: Text(
+                  item.lineText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace', color: Color(0xFFABB2BF)),
+                ),
+                onTap: () => widget.onOpenFile(item.file),
+              );
+            },
           ),
         ),
       ],

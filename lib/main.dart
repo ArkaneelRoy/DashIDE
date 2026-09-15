@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:highlight/languages/dart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'core/editor_utils.dart';
 import 'data/models/file_node.dart';
 import 'data/repositories/workspace_repository.dart';
 import 'data/repositories/github_build_service.dart';
@@ -14,6 +15,7 @@ import 'presentation/widgets/ide_activity_rail.dart';
 import 'presentation/widgets/ide_status_bar.dart';
 import 'presentation/widgets/ide_tab_bar.dart';
 import 'presentation/widgets/ide_panels.dart';
+import 'presentation/widgets/ide_command_palette.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,6 +61,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   String _savedFileSnapshot = '';
   bool _isDirty = false;
 
+  // 0: None, 1: Explorer, 2: Search, 3: Console
   int _activePanel = 0;
   bool _isPreviewMode = false;
   String _savedPatToken = '';
@@ -188,6 +191,16 @@ class _WorkspacePageState extends State<WorkspacePage> {
     }
   }
 
+  void _formatCurrentCode() {
+    if (_activeFile == null) return;
+    final formatted = EditorUtils.formatDartCode(_editorController.text);
+    _editorController.value = TextEditingValue(
+      text: formatted,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+    _log('Formatted active buffer');
+  }
+
   Future<void> _createNewEntityPrompt({required bool isDirectory}) async {
     final textController = TextEditingController();
     final name = await showDialog<String>(
@@ -273,7 +286,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
               final service = GitHubBuildService(owner: 'ArkaneelRoy', repo: 'DashIDE', token: token);
               setState(() {
-                _activePanel = 2;
+                _activePanel = 3;
                 _buildStatus = 'Syncing...';
               });
 
@@ -344,6 +357,20 @@ class _WorkspacePageState extends State<WorkspacePage> {
     });
   }
 
+  void _openCommandPalette() {
+    IdeCommandPalette.show(
+      context,
+      IdeCommandPalette(
+        files: _files,
+        onSave: _saveCurrentFile,
+        onFormat: _formatCurrentCode,
+        onBuild: _showBuildAndInstallDialog,
+        onNewFile: () => _createNewEntityPrompt(isDirectory: false),
+        onOpenFile: _openFile,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.of(context).size.width < 700;
@@ -369,6 +396,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   IdeActivityRail(
                     activePanel: _activePanel,
                     onPanelSelected: (panel) => setState(() => _activePanel = panel),
+                    onOpenPalette: _openCommandPalette,
                   ),
                   if (_activePanel != 0)
                     Container(
@@ -377,18 +405,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                         color: Color(0xFF21252B),
                         border: Border(right: BorderSide(color: Color(0xFF282C34))),
                       ),
-                      child: _activePanel == 1
-                          ? IdeExplorerPanel(
-                              files: _files,
-                              activeFile: _activeFile,
-                              onFileSelected: _openFile,
-                              onNewFile: () => _createNewEntityPrompt(isDirectory: false),
-                              onNewFolder: () => _createNewEntityPrompt(isDirectory: true),
-                            )
-                          : IdeConsolePanel(
-                              logs: _consoleLogs,
-                              onClear: () => setState(() => _consoleLogs.clear()),
-                            ),
+                      child: _buildSelectedPanel(),
                     ),
                   Expanded(
                     child: Column(
@@ -431,5 +448,29 @@ class _WorkspacePageState extends State<WorkspacePage> {
         ),
       ),
     );
+  }
+
+  Widget _buildSelectedPanel() {
+    switch (_activePanel) {
+      case 1:
+        return IdeExplorerPanel(
+          files: _files,
+          activeFile: _activeFile,
+          onFileSelected: _openFile,
+          onNewFile: () => _createNewEntityPrompt(isDirectory: false),
+          onNewFolder: () => _createNewEntityPrompt(isDirectory: true),
+        );
+      case 2:
+        return IdeSearchPanel(
+          files: _files,
+          onOpenFile: _openFile,
+        );
+      case 3:
+      default:
+        return IdeConsolePanel(
+          logs: _consoleLogs,
+          onClear: () => setState(() => _consoleLogs.clear()),
+        );
+    }
   }
 }

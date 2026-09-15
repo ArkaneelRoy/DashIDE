@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class IdeActivityRail extends StatelessWidget {
   final int activePanel;
   final Function(int) onPanelSelected;
+  final VoidCallback onOpenPalette;
 
   const IdeActivityRail({
     super.key,
     required this.activePanel,
     required this.onPanelSelected,
+    required this.onOpenPalette,
   });
 
   Widget _buildRailIcon({
@@ -54,9 +56,25 @@ class IdeActivityRail extends StatelessWidget {
             tooltip: 'Explorer',
           ),
           _buildRailIcon(
-            icon: Icons.terminal_outlined,
+            icon: Icons.search,
             index: 2,
+            tooltip: 'Global Workspace Search',
+          ),
+          _buildRailIcon(
+            icon: Icons.terminal_outlined,
+            index: 3,
             tooltip: 'Console Logs',
+          ),
+          Tooltip(
+            message: 'Command Palette',
+            child: InkWell(
+              onTap: onOpenPalette,
+              child: const SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(Icons.bolt, size: 20, color: Color(0xFFE5C07B)),
+              ),
+            ),
           ),
           const Spacer(),
           IconButton(
