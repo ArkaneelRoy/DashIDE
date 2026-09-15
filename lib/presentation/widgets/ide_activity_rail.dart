@@ -4,12 +4,14 @@ class IdeActivityRail extends StatelessWidget {
   final int activePanel;
   final Function(int) onPanelSelected;
   final VoidCallback onOpenPalette;
+  final VoidCallback onOpenSettings;
 
   const IdeActivityRail({
     super.key,
     required this.activePanel,
     required this.onPanelSelected,
     required this.onOpenPalette,
+    required this.onOpenSettings,
   });
 
   Widget _buildRailIcon({
@@ -79,7 +81,7 @@ class IdeActivityRail extends StatelessWidget {
           const Spacer(),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 18, color: Color(0xFF5C6370)),
-            onPressed: () {},
+            onPressed: onOpenSettings,
           ),
           const SizedBox(height: 6),
         ],

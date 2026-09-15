@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
+import 'package:flutter_highlight/themes/dracula.dart';
+import 'package:flutter_highlight/themes/github.dart';
+import 'package:flutter_highlight/themes/monokai-sublime.dart';
 import '../../core/editor_utils.dart';
 
 class CodeEditorView extends StatefulWidget {
   final CodeController controller;
+  final double fontSize;
+  final String themeName;
   final VoidCallback? onCursorMoved;
 
   const CodeEditorView({
     super.key,
     required this.controller,
+    this.fontSize = 13.0,
+    this.themeName = 'Atom One Dark',
     this.onCursorMoved,
   });
 
@@ -18,10 +25,23 @@ class CodeEditorView extends StatefulWidget {
 }
 
 class _CodeEditorViewState extends State<CodeEditorView> {
-  double _fontSize = 13.0;
   bool _showFindBar = false;
   final TextEditingController _findController = TextEditingController();
   final TextEditingController _replaceController = TextEditingController();
+
+  Map<String, TextStyle> get _activeTheme {
+    switch (widget.themeName) {
+      case 'Dracula':
+        return draculaTheme;
+      case 'Monokai':
+        return monokaiSublimeTheme;
+      case 'GitHub Light':
+        return githubTheme;
+      case 'Atom One Dark':
+      default:
+        return atomOneDarkTheme;
+    }
+  }
 
   @override
   void initState() {
@@ -110,9 +130,7 @@ class _CodeEditorViewState extends State<CodeEditorView> {
     final currentOffset = widget.controller.selection.end;
     var nextIndex = text.indexOf(query, currentOffset >= 0 ? currentOffset : 0);
 
-    if (nextIndex == -1) {
-      nextIndex = text.indexOf(query, 0);
-    }
+    if (nextIndex == -1) nextIndex = text.indexOf(query, 0);
 
     if (nextIndex != -1) {
       widget.controller.selection = TextSelection(
@@ -157,152 +175,147 @@ class _CodeEditorViewState extends State<CodeEditorView> {
       '{', '}', '(', ')', ';', '"', "'", '=', '=>', 'Tab', '//', '<', '>', '.'
     ];
 
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: Column(
-        children: [
-          if (_showFindBar)
-            Container(
-              color: const Color(0xFF21252B),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 28,
-                      child: TextField(
-                        controller: _findController,
-                        style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Search...',
-                          hintStyle: const TextStyle(color: Colors.grey, fontSize: 11),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          filled: true,
-                          fillColor: const Color(0xFF1E2227),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
-                        ),
-                        onSubmitted: (_) => _findAndHighlight(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_downward, size: 14, color: Colors.grey),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    onPressed: _findAndHighlight,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 14, color: Colors.grey),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                    onPressed: () => setState(() => _showFindBar = false),
-                  ),
-                ],
-              ),
-            ),
-
-          // Code Field
-          Expanded(
-            child: RepaintBoundary(
-              child: CodeTheme(
-                data: CodeThemeData(styles: atomOneDarkTheme),
-                child: CodeField(
-                  controller: widget.controller,
-                  textStyle: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: _fontSize,
-                    height: 1.45,
-                  ),
-                  gutterStyle: const GutterStyle(
-                    showLineNumbers: true,
-                    width: 56,
-                    textStyle: TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                      color: Color(0xFF5C6370),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Lower Accessory Toolbar
+    return Column(
+      children: [
+        if (_showFindBar)
           Container(
-            height: 38,
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E2227),
-              border: Border(top: BorderSide(color: Color(0xFF282C34))),
-            ),
+            color: const Color(0xFF21252B),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.auto_fix_high_outlined, size: 16, color: Color(0xFF61AFEF)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32),
-                  tooltip: 'Format Code',
-                  onPressed: _formatCode,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.data_object_outlined, size: 16, color: Color(0xFFE5C07B)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32),
-                  tooltip: 'Snippets',
-                  onPressed: _showSnippetPicker,
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.search,
-                    size: 16,
-                    color: _showFindBar ? const Color(0xFF61AFEF) : const Color(0xFF5C6370),
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32),
-                  onPressed: () => setState(() => _showFindBar = !_showFindBar),
-                ),
-                Container(width: 1, height: 18, color: const Color(0xFF282C34), margin: const EdgeInsets.symmetric(horizontal: 4)),
                 Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: symbols.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 4),
-                    itemBuilder: (context, index) {
-                      final item = symbols[index];
-                      return InkWell(
-                        onTap: () => item == 'Tab' ? _insertText('  ') : _insertText(item),
-                        borderRadius: BorderRadius.circular(3),
-                        child: Container(
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 9),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF282C34),
-                            borderRadius: BorderRadius.circular(3),
-                            border: Border.all(color: const Color(0xFF353B45)),
-                          ),
-                          child: Text(
-                            item,
-                            style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                              color: Color(0xFFABB2BF),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                  child: SizedBox(
+                    height: 28,
+                    child: TextField(
+                      controller: _findController,
+                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Search...',
+                        hintStyle: const TextStyle(color: Colors.grey, fontSize: 11),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        filled: true,
+                        fillColor: const Color(0xFF1E2227),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide.none),
+                      ),
+                      onSubmitted: (_) => _findAndHighlight(),
+                    ),
                   ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.arrow_downward, size: 14, color: Colors.grey),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: _findAndHighlight,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 14, color: Colors.grey),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: () => setState(() => _showFindBar = false),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+
+        // Code Field
+        Expanded(
+          child: RepaintBoundary(
+            child: CodeTheme(
+              data: CodeThemeData(styles: _activeTheme),
+              child: CodeField(
+                controller: widget.controller,
+                textStyle: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: widget.fontSize,
+                  height: 1.45,
+                ),
+                gutterStyle: const GutterStyle(
+                  showLineNumbers: true,
+                  width: 56,
+                  textStyle: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    color: Color(0xFF5C6370),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // Accessory Bar
+        Container(
+          height: 38,
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E2227),
+            border: Border(top: BorderSide(color: Color(0xFF282C34))),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.auto_fix_high_outlined, size: 16, color: Color(0xFF61AFEF)),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32),
+                tooltip: 'Format Code',
+                onPressed: _formatCode,
+              ),
+              IconButton(
+                icon: const Icon(Icons.data_object_outlined, size: 16, color: Color(0xFFE5C07B)),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32),
+                tooltip: 'Snippets',
+                onPressed: _showSnippetPicker,
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.search,
+                  size: 16,
+                  color: _showFindBar ? const Color(0xFF61AFEF) : const Color(0xFF5C6370),
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32),
+                onPressed: () => setState(() => _showFindBar = !_showFindBar),
+              ),
+              Container(width: 1, height: 18, color: const Color(0xFF282C34), margin: const EdgeInsets.symmetric(horizontal: 4)),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: symbols.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 4),
+                  itemBuilder: (context, index) {
+                    final item = symbols[index];
+                    return InkWell(
+                      onTap: () => item == 'Tab' ? _insertText('  ') : _insertText(item),
+                      borderRadius: BorderRadius.circular(3),
+                      child: Container(
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF282C34),
+                          borderRadius: BorderRadius.circular(3),
+                          border: Border.all(color: const Color(0xFF353B45)),
+                        ),
+                        child: Text(
+                          item,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: Color(0xFFABB2BF),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

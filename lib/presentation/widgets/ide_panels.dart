@@ -6,6 +6,7 @@ class IdeExplorerPanel extends StatelessWidget {
   final List<FileNode> files;
   final File? activeFile;
   final Function(File) onFileSelected;
+  final Function(FileSystemEntity, bool) onDeleteEntity;
   final VoidCallback onNewFile;
   final VoidCallback onNewFolder;
 
@@ -14,6 +15,7 @@ class IdeExplorerPanel extends StatelessWidget {
     required this.files,
     required this.activeFile,
     required this.onFileSelected,
+    required this.onDeleteEntity,
     required this.onNewFile,
     required this.onNewFolder,
   });
@@ -27,13 +29,19 @@ class IdeExplorerPanel extends StatelessWidget {
           tilePadding: const EdgeInsets.symmetric(horizontal: 8),
           leading: const Icon(Icons.folder_outlined, size: 16, color: Color(0xFFE5C07B)),
           title: Text(node.name, style: const TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
+          trailing: IconButton(
+            icon: const Icon(Icons.delete_outline, size: 14, color: Color(0xFFE06C75)),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+            onPressed: () => onDeleteEntity(node.entity, true),
+          ),
           children: _buildTree(context, node.children),
         );
       }
       final isSelected = activeFile?.path == node.entity.path;
       return ListTile(
         dense: true,
-        contentPadding: const EdgeInsets.only(left: 20, right: 8),
+        contentPadding: const EdgeInsets.only(left: 20, right: 4),
         tileColor: isSelected ? const Color(0xFF2C313A) : null,
         leading: const Icon(Icons.description_outlined, size: 15, color: Color(0xFF61AFEF)),
         title: Text(
@@ -43,6 +51,12 @@ class IdeExplorerPanel extends StatelessWidget {
             fontFamily: 'monospace',
             color: isSelected ? Colors.white : const Color(0xFFABB2BF),
           ),
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_outline, size: 14, color: Color(0xFFE06C75)),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          onPressed: () => onDeleteEntity(node.entity, false),
         ),
         onTap: () => onFileSelected(node.entity as File),
       );
