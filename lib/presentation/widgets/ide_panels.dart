@@ -21,7 +21,7 @@ class IdeExplorerPanel extends StatelessWidget {
   List<Widget> _buildTree(BuildContext context, List<FileNode> nodes) {
     return nodes.map((node) {
       if (node.isDirectory) {
-        return ExpansionTile(
+        return ExpansionTile(initiallyExpanded: true,
           dense: true,
           tilePadding: const EdgeInsets.symmetric(horizontal: 8),
           leading: const Icon(Icons.folder_outlined, size: 16, color: Color(0xFFE5C07B)),
