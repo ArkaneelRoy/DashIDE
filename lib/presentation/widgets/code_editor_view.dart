@@ -1,40 +1,29 @@
 import "package:flutter/material.dart";
-import "package:re_editor/re_editor.dart";
-import "package:re_highlight/languages/dart.dart";
-import "package:re_highlight/styles/monokai-sublime.dart";
+import "package:flutter_code_editor/flutter_code_editor.dart";
+import "package:flutter_highlight/themes/monokai-sublime.dart";
 
 class CodeEditorView extends StatelessWidget {
-  final CodeEditorController controller;
+  final CodeController controller;
 
   const CodeEditorView({super.key, required this.controller});
 
   @override
   Widget build(BuildContext context) {
-    return CodeEditor(
-      controller: controller,
-      style: CodeEditorStyle(
-        fontSize: 14,
-        fontFamily: "monospace",
-        codeTheme: CodeHighlightTheme(
-          languages: {"dart": CodeHighlightThemeMode(mode: langDart)},
-          theme: monokaiSublimeTheme,
+    return CodeTheme(
+      data: CodeThemeData(styles: monokaiSublimeTheme),
+      child: SingleChildScrollView(
+        child: CodeField(
+          controller: controller,
+          textStyle: const TextStyle(
+            fontFamily: "monospace",
+            fontSize: 14,
+          ),
+          gutterStyle: const GutterStyle(
+            showLineNumbers: true,
+            width: 50,
+          ),
         ),
       ),
-      indicatorBuilder: (context, editingController, chunkController, notifier) {
-        return Row(
-          children: [
-            DefaultCodeLineNumber(
-              controller: editingController,
-              notifier: notifier,
-            ),
-            DefaultCodeChunkIndicator(
-              width: 16,
-              controller: chunkController,
-              notifier: notifier,
-            )
-          ],
-        );
-      },
     );
   }
 }

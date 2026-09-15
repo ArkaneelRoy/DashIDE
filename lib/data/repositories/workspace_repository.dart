@@ -50,17 +50,23 @@ class WorkspaceRepository {
     if (!await libDir.exists()) {
       await libDir.create(recursive: true);
       final mainDart = File("${libDir.path}/main.dart");
-      await mainDart.writeAsString(r"""import package:flutter/material.dart;
-
-void main() => runApp(const MyApp());
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        body: Center(
-          child: Text(Built
+      const starterCode = "import 'package:flutter/material.dart';\n\n"
+          "void main() => runApp(const MyApp());\n\n"
+          "class MyApp extends StatelessWidget {\n"
+          "  const MyApp({super.key});\n\n"
+          "  @override\n"
+          "  Widget build(BuildContext context) {\n"
+          "    return const MaterialApp(\n"
+          "      debugShowCheckedModeBanner: false,\n"
+          "      home: Scaffold(\n"
+          "        body: Center(\n"
+          "          child: Text('Built inside DashIDE!'),\n"
+          "        ),\n"
+          "      ),\n"
+          "    );\n"
+          "  }\n"
+          "}\n";
+      await mainDart.writeAsString(starterCode);
+    }
+  }
+}

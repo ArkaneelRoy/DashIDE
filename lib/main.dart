@@ -1,6 +1,7 @@
 import "dart:io";
 import "package:flutter/material.dart";
-import "package:re_editor/re_editor.dart";
+import "package:flutter_code_editor/flutter_code_editor.dart";
+import "package:highlight/languages/dart.dart";
 import "data/models/file_node.dart";
 import "data/repositories/workspace_repository.dart";
 import "presentation/widgets/code_editor_view.dart";
@@ -33,14 +34,24 @@ class WorkspacePage extends StatefulWidget {
 
 class _WorkspacePageState extends State<WorkspacePage> {
   final WorkspaceRepository _repo = WorkspaceRepository();
-  final CodeEditorController _editorController = CodeEditorController();
+  late final CodeController _editorController;
   List<FileNode> _files = [];
   File? _activeFile;
 
   @override
   void initState() {
     super.initState();
+    _editorController = CodeController(
+      text: "",
+      language: dart,
+    );
     _initWorkspace();
+  }
+
+  @override
+  void dispose() {
+    _editorController.dispose();
+    super.dispose();
   }
 
   Future<void> _initWorkspace() async {
@@ -50,7 +61,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
       _files = tree;
     });
 
-    // Automatically open the first main.dart found
     final mainDart = _findMainDart(tree);
     if (mainDart != null) {
       await _openFile(mainDart);
