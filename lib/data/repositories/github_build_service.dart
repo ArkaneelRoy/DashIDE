@@ -22,7 +22,7 @@ class GitHubBuildService {
         'X-GitHub-Api-Version': '2022-11-28',
       };
 
-  static const String multiTargetWorkflow = '''name: Multi-Platform Flutter CI Build
+  static const String multiTargetWorkflow = r'''name: Multi-Platform Flutter CI Build
 on:
   workflow_dispatch:
     inputs:
