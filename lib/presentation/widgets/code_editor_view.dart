@@ -237,7 +237,7 @@ class _CodeEditorViewState extends State<CodeEditorView> {
                       ),
                       gutterStyle: const GutterStyle(
                         showLineNumbers: true,
-                        width: 56,
+                        margin: 16.0,
                         textStyle: TextStyle(
                           fontFamily: 'monospace',
                           fontSize: 11,
