@@ -1,0 +1,41 @@
+name: Publish to GitHub Releases
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers whenever you push a tag like v1.0.0
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Generate Platform Folders
+        run: flutter create .
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Android ARM64 APK
+        run: flutter build apk --release --target-platform=android-arm64 --android-skip-build-dependency-validation
+
+      - name: Create Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+          generate_release_notes: true
