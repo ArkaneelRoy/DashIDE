@@ -65,7 +65,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   int _activePanel = 0;
   bool _isPreviewMode = false;
   String _savedPat = '';
-  String _targetRepo = 'ArkaneelRoy/DashIDE';
+  String _targetRepo = ''; // Default is now empty
   bool _isGitBusy = false;
 
   final List<String> _consoleLogs = ['DashIDE workspace ready.'];
@@ -109,7 +109,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _savedPat = prefs.getString('github_pat_token') ?? '';
-      _targetRepo = prefs.getString('target_repo') ?? 'ArkaneelRoy/DashIDE';
+      _targetRepo = prefs.getString('target_repo') ?? '';
       _fontSize = prefs.getDouble('editor_font_size') ?? 13.0;
       _theme = prefs.getString('editor_theme') ?? 'Atom One Dark';
     });
@@ -136,12 +136,16 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   GitHubBuildService _createService(String token) {
     final parts = _targetRepo.split('/');
-    final owner = parts.isNotEmpty ? parts[0] : 'ArkaneelRoy';
-    final repo = parts.length > 1 ? parts[1] : 'DashIDE';
+    final owner = parts.isNotEmpty && parts[0].isNotEmpty ? parts[0] : 'owner';
+    final repo = parts.length > 1 ? parts[1] : 'repo';
     return GitHubBuildService(owner: owner, repo: repo, token: token);
   }
 
   Future<void> _commitAndPush(String message) async {
+    if (_targetRepo.isEmpty || !_targetRepo.contains('/')) {
+      _log('Error: Target repository not set. Tap the ⇄ icon in the Source Control panel.');
+      return;
+    }
     if (_savedPat.isEmpty) {
       _log('Error: Personal Access Token required. Open settings or build dialog.');
       return;
@@ -262,7 +266,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final token = result['token'] ?? '';
     final repo = result['repo'] ?? _targetRepo;
     final target = result['target'] ?? 'android-arm64';
-    if (token.isEmpty || repo.isEmpty) return;
+    
+    if (token.isEmpty && target != 'local') return;
+    if ((repo.isEmpty || !repo.contains('/')) && target != 'local') {
+      _log('Error: A valid owner/repo destination is required for cloud builds.');
+      setState(() => _activePanel = 4);
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('github_pat_token', token);
@@ -275,8 +285,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
     if (_activeFile != null) await _saveFile();
     final root = await _repo.workspaceDir;
+    final projectDir = Directory('${root.path}/demo_app');
+    
     final service = _createService(token);
-
     final runner = PipelineController(
       service: service,
       target: target,
@@ -284,7 +295,11 @@ class _WorkspacePageState extends State<WorkspacePage> {
       onStatusChanged: (status) => setState(() => _buildStatus = status),
     );
 
-    runner.runPipeline(Directory('${root.path}/demo_app'));
+    if (target == 'local') {
+      runner.runLocalBuild(projectDir);
+    } else {
+      runner.runPipeline(projectDir);
+    }
   }
 
   @override
@@ -365,7 +380,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                             onNewFolder: () => _newEntity(isDirectory: true),
                           ),
                           IdeGitPanel(
-                            activeRepo: _targetRepo,
+                            activeRepo: _targetRepo.isEmpty ? 'Tap ⇄ to configure repo' : _targetRepo,
                             isBusy: _isGitBusy,
                             unpushedFiles: _unpushedFiles,
                             onCommitAndPush: _commitAndPush,
@@ -408,7 +423,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
               ),
             ),
             IdeStatusBar(
-              branch: _targetRepo.split('/').last,
+              branch: _targetRepo.isEmpty ? 'no-repo' : _targetRepo.split('/').last,
               buildStatus: _buildStatus,
               line: _cursorLine,
               col: _cursorCol,
