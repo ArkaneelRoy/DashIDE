@@ -1,72 +1,117 @@
-import "dart:io";
-import "package:path_provider/path_provider.dart";
-import "../models/file_node.dart";
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import '../models/file_node.dart';
 
 class WorkspaceRepository {
   Future<Directory> get workspaceDir async {
-    final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory("${docs.path}/workspace");
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-    return dir;
-  }
-
-  Future<List<FileNode>> loadFileTree() async {
-    final root = await workspaceDir;
-    return _scanDirectory(root);
-  }
-
-  List<FileNode> _scanDirectory(Directory dir) {
-    if (!dir.existsSync()) return [];
-    final List<FileSystemEntity> entities = dir.listSync();
-    entities.sort((a, b) {
-      if (a is Directory && b is! Directory) return -1;
-      if (a is! Directory && b is Directory) return 1;
-      return a.path.toLowerCase().compareTo(b.path.toLowerCase());
-    });
-
-    return entities.map((entity) {
-      final name = entity.uri.pathSegments.where((e) => e.isNotEmpty).last;
-      if (entity is Directory) {
-        return FileNode(
-          entity: entity,
-          name: name,
-          isDirectory: true,
-          children: _scanDirectory(entity),
-        );
-      }
-      return FileNode(
-        entity: entity,
-        name: name,
-        isDirectory: false,
-      );
-    }).toList();
+    final docDir = await getApplicationDocumentsDirectory();
+    return Directory('${docDir.path}/DashIDE_Workspace');
   }
 
   Future<void> initDefaultProject() async {
     final root = await workspaceDir;
-    final libDir = Directory("${root.path}/demo_app/lib");
+    final projectDir = Directory('${root.path}/demo_app');
+    
+    if (!await projectDir.exists()) {
+      await projectDir.create(recursive: true);
+    }
+
+    // 1. Create lib directory and main.dart
+    final libDir = Directory('${projectDir.path}/lib');
     if (!await libDir.exists()) {
       await libDir.create(recursive: true);
-      final mainDart = File("${libDir.path}/main.dart");
-      const starterCode = "import 'package:flutter/material.dart';\n\n"
-          "void main() => runApp(const MyApp());\n\n"
-          "class MyApp extends StatelessWidget {\n"
-          "  const MyApp({super.key});\n\n"
-          "  @override\n"
-          "  Widget build(BuildContext context) {\n"
-          "    return const MaterialApp(\n"
-          "      debugShowCheckedModeBanner: false,\n"
-          "      home: Scaffold(\n"
-          "        body: Center(\n"
-          "          child: Text('Built inside DashIDE!'),\n"
-          "        ),\n"
-          "      ),\n"
-          "    );\n"
-          "  }\n"
-          "}\n";
-      await mainDart.writeAsString(starterCode);
     }
+
+    final mainFile = File('${libDir.path}/main.dart');
+    if (!await mainFile.exists()) {
+      await mainFile.writeAsString('''import 'package:flutter/material.dart';
+
+void main() => runApp(const MyApp());
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Text('Built inside DashIDE!'),
+        ),
+      ),
+    );
+  }
+}
+''');
+    }
+
+    // 2. Create default pubspec.yaml for dependencies and CI/CD
+    final pubspecFile = File('${projectDir.path}/pubspec.yaml');
+    if (!await pubspecFile.exists()) {
+      await pubspecFile.writeAsString('''name: demo_app
+description: A new Flutter project built in DashIDE.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+''');
+    }
+  }
+
+  Future<List<FileNode>> loadFileTree() async {
+    final root = await workspaceDir;
+    final projectDir = Directory('${root.path}/demo_app');
+    if (!await projectDir.exists()) return [];
+    return _buildTree(projectDir);
+  }
+
+  List<FileNode> _buildTree(Directory dir) {
+    final nodes = <FileNode>[];
+    final entities = dir.listSync()..sort((a, b) {
+      final aIsDir = a is Directory;
+      final bIsDir = b is Directory;
+      if (aIsDir && !bIsDir) return -1;
+      if (!aIsDir && bIsDir) return 1;
+      return a.path.toLowerCase().compareTo(b.path.toLowerCase());
+    });
+
+    for (final entity in entities) {
+      final name = entity.path.split('/').last;
+      
+      // Hide internal Git/Build folders from the IDE Explorer
+      if (name.startsWith('.') || name == 'build') continue;
+
+      if (entity is Directory) {
+        nodes.add(FileNode(
+          name: name,
+          entity: entity,
+          isDirectory: true,
+          children: _buildTree(entity),
+        ));
+      } else if (entity is File) {
+        nodes.add(FileNode(
+          name: name,
+          entity: entity,
+          isDirectory: false,
+          children: const [],
+        ));
+      }
+    }
+    return nodes;
   }
 }
