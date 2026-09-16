@@ -57,9 +57,9 @@ jobs:
       - name: Compile APK
         run: |
           if [ "${{ inputs.target }}" = "android-armv7" ]; then
-            flutter build apk --release --target-platform=android-arm
+            flutter build apk --release --target-platform=android-arm --android-skip-build-dependency-validation
           else
-            flutter build apk --release --target-platform=android-arm64
+            flutter build apk --release --target-platform=android-arm64 --android-skip-build-dependency-validation
           fi
       - uses: actions/upload-artifact@v4
         with:
@@ -267,7 +267,6 @@ jobs:
     final archive = ZipDecoder().decodeBytes(response.bodyBytes);
     final tempDir = await getTemporaryDirectory();
 
-    // On Android, install the APK directly
     if (target.startsWith('android')) {
       for (final file in archive) {
         if (file.isFile && file.name.endsWith('.apk')) {
@@ -280,7 +279,6 @@ jobs:
         }
       }
     } else {
-      // For desktop binaries (zip/tar.gz), save bundle to downloads/temp folder
       final bundlePath = '${tempDir.path}/$target-release.zip';
       final bundleFile = File(bundlePath);
       await bundleFile.writeAsBytes(response.bodyBytes);

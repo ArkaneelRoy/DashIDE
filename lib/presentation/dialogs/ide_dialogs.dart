@@ -8,14 +8,16 @@ class IdeDialogs {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF21252B),
         title: Text(isDirectory ? 'New Directory' : 'New Dart File', style: const TextStyle(fontSize: 15)),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-          decoration: InputDecoration(
-            hintText: isDirectory ? 'screens' : 'button.dart',
-            border: const OutlineInputBorder(),
+        content: SingleChildScrollView(
+          child: TextField(
+            controller: controller,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+            decoration: InputDecoration(
+              hintText: isDirectory ? 'screens' : 'button.dart',
+              border: const OutlineInputBorder(),
+            ),
+            autofocus: true,
           ),
-          autofocus: true,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -35,12 +37,14 @@ class IdeDialogs {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF21252B),
         title: Text('Delete $entityName?', style: const TextStyle(fontSize: 15)),
-        content: Text(
-          isDirectory ? 'Delete this folder and all internal contents?' : 'Delete this file permanently?',
-          style: const TextStyle(fontSize: 13, color: Color(0xFFABB2BF)),
+        content: SingleChildScrollView(
+          child: Text(
+            isDirectory ? 'Delete this folder and all internal contents?' : 'Delete this file permanently?',
+            style: const TextStyle(fontSize: 13, color: Color(0xFFABB2BF)),
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE06C75)),
             onPressed: () => Navigator.pop(ctx, true),
@@ -64,20 +68,22 @@ class IdeDialogs {
             Text('Switch Target Repo', style: TextStyle(fontSize: 15)),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Enter owner/repository (e.g. ArkaneelRoy/my_app). Will be created automatically if missing.',
-              style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF)),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter owner/repository (e.g. ArkaneelRoy/my_app). Will be created automatically if missing.',
+                style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF)),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -113,49 +119,51 @@ class IdeDialogs {
               Text('IDE Settings', style: TextStyle(fontSize: 16)),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Font Size', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
-              Row(
-                children: [
-                  Expanded(
-                    child: Slider(
-                      value: currentFontSize,
-                      min: 10.0,
-                      max: 22.0,
-                      divisions: 12,
-                      activeColor: const Color(0xFF61AFEF),
-                      onChanged: (v) => setDialogState(() => currentFontSize = v),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Font Size', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Slider(
+                        value: currentFontSize,
+                        min: 10.0,
+                        max: 22.0,
+                        divisions: 12,
+                        activeColor: const Color(0xFF61AFEF),
+                        onChanged: (v) => setDialogState(() => currentFontSize = v),
+                      ),
+                    ),
+                    Text('${currentFontSize.toInt()}pt', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text('Syntax Theme', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2227),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFF353B45)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF21252B),
+                      value: currentTheme,
+                      items: themes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
+                      onChanged: (v) {
+                        if (v != null) setDialogState(() => currentTheme = v);
+                      },
                     ),
                   ),
-                  Text('${currentFontSize.toInt()}pt', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text('Syntax Theme', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E2227),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: const Color(0xFF353B45)),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    dropdownColor: const Color(0xFF21252B),
-                    value: currentTheme,
-                    items: themes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
-                    onChanged: (v) {
-                      if (v != null) setDialogState(() => currentTheme = v);
-                    },
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -173,8 +181,9 @@ class IdeDialogs {
     );
   }
 
-  static Future<Map<String, String>?> showBuildDialog(BuildContext context, String initialToken) {
+  static Future<Map<String, String>?> showBuildDialog(BuildContext context, String initialToken, String initialRepo) {
     final tokenController = TextEditingController(text: initialToken);
+    final repoController = TextEditingController(text: initialRepo);
     String selectedTarget = 'android-arm64';
 
     final targets = {
@@ -197,43 +206,53 @@ class IdeDialogs {
               Text('Cloud Build Pipeline', style: TextStyle(fontSize: 16)),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Target Platform', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E2227),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: const Color(0xFF353B45)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Repository Destination', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: repoController,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  decoration: const InputDecoration(hintText: 'owner/repo', border: OutlineInputBorder(), isDense: true),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    dropdownColor: const Color(0xFF21252B),
-                    value: selectedTarget,
-                    items: targets.entries
-                        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 12.5))))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) setDialogState(() => selectedTarget = v);
-                    },
+                const SizedBox(height: 14),
+                const Text('Target Platform', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2227),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFF353B45)),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF21252B),
+                      value: selectedTarget,
+                      items: targets.entries
+                          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 12.5))))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setDialogState(() => selectedTarget = v);
+                      },
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              const Text('GitHub Personal Access Token', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
-              const SizedBox(height: 6),
-              TextField(
-                controller: tokenController,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                decoration: const InputDecoration(hintText: 'ghp_...', border: OutlineInputBorder(), isDense: true),
-                obscureText: true,
-              ),
-            ],
+                const SizedBox(height: 14),
+                const Text('GitHub Personal Access Token', style: TextStyle(fontSize: 12, color: Color(0xFFABB2BF))),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: tokenController,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  decoration: const InputDecoration(hintText: 'ghp_...', border: OutlineInputBorder(), isDense: true),
+                  obscureText: true,
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -241,8 +260,9 @@ class IdeDialogs {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF98C379)),
               onPressed: () {
                 final token = tokenController.text.trim();
-                if (token.isNotEmpty) {
-                  Navigator.pop(ctx, {'token': token, 'target': selectedTarget});
+                final repo = repoController.text.trim();
+                if (token.isNotEmpty && repo.isNotEmpty) {
+                  Navigator.pop(ctx, {'token': token, 'repo': repo, 'target': selectedTarget});
                 }
               },
               child: const Text('Dispatch Build', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),

@@ -248,17 +248,20 @@ class _WorkspacePageState extends State<WorkspacePage> {
   }
 
   Future<void> _triggerPipeline() async {
-    final result = await IdeDialogs.showBuildDialog(context, _savedPat);
+    final result = await IdeDialogs.showBuildDialog(context, _savedPat, _targetRepo);
     if (result == null) return;
 
     final token = result['token'] ?? '';
     final target = result['target'] ?? 'android-arm64';
+    final repo = result['repo'] ?? _targetRepo;
     if (token.isEmpty) return;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('github_pat_token', token);
+    await prefs.setString('target_repo', repo);
     setState(() {
       _savedPat = token;
+      _targetRepo = repo;
       _activePanel = 4;
     });
 
