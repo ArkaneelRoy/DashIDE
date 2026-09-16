@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:highlight/languages/dart.dart';
+import 'package:highlight/languages/yaml.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/editor_utils.dart';
 import 'data/models/file_node.dart';
@@ -61,11 +62,10 @@ class _WorkspacePageState extends State<WorkspacePage> {
   bool _isDirty = false;
   final Set<String> _unpushedFiles = {};
 
-  // 0: None, 1: Explorer, 2: Git, 3: Search, 4: Console, 5: SSH
   int _activePanel = 0;
   bool _isPreviewMode = false;
   String _savedPat = '';
-  String _targetRepo = ''; 
+  String _targetRepo = '';
   bool _isGitBusy = false;
 
   final List<String> _consoleLogs = ['DashIDE workspace ready.'];
@@ -190,8 +190,11 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
     final text = await file.readAsString();
     _savedFileSnapshot = text;
+    final isYaml = file.path.endsWith('.yaml') || file.path.endsWith('.yml');
+    
     setState(() {
       _activeFile = file;
+      _editorController.language = isYaml ? yaml : dart;
       _editorController.text = text;
       _isDirty = false;
     });
@@ -295,7 +298,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
       onStatusChanged: (status) => setState(() => _buildStatus = status),
     );
 
-    // Strictly call the cloud pipeline
     runner.runPipeline(projectDir);
   }
 
