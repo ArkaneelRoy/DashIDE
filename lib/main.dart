@@ -65,7 +65,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   int _activePanel = 0;
   bool _isPreviewMode = false;
   String _savedPat = '';
-  String _targetRepo = ''; // Default is now empty
+  String _targetRepo = ''; 
   bool _isGitBusy = false;
 
   final List<String> _consoleLogs = ['DashIDE workspace ready.'];
@@ -267,8 +267,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
     final repo = result['repo'] ?? _targetRepo;
     final target = result['target'] ?? 'android-arm64';
     
-    if (token.isEmpty && target != 'local') return;
-    if ((repo.isEmpty || !repo.contains('/')) && target != 'local') {
+    if (token.isEmpty) return;
+    if (repo.isEmpty || !repo.contains('/')) {
       _log('Error: A valid owner/repo destination is required for cloud builds.');
       setState(() => _activePanel = 4);
       return;
@@ -295,11 +295,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
       onStatusChanged: (status) => setState(() => _buildStatus = status),
     );
 
-    if (target == 'local') {
-      runner.runLocalBuild(projectDir);
-    } else {
-      runner.runPipeline(projectDir);
-    }
+    // Strictly call the cloud pipeline
+    runner.runPipeline(projectDir);
   }
 
   @override
