@@ -16,7 +16,7 @@ class WorkspaceRepository {
       await projectDir.create(recursive: true);
     }
 
-    // 1. Create lib directory and main.dart
+    // 1. Generate default main.dart
     final libDir = Directory('${projectDir.path}/lib');
     if (!await libDir.exists()) {
       await libDir.create(recursive: true);
@@ -46,7 +46,7 @@ class MyApp extends StatelessWidget {
 ''');
     }
 
-    // 2. Create default pubspec.yaml for dependencies and CI/CD
+    // 2. Generate default workspace pubspec.yaml
     final pubspecFile = File('${projectDir.path}/pubspec.yaml');
     if (!await pubspecFile.exists()) {
       await pubspecFile.writeAsString('''name: demo_app
@@ -60,6 +60,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Add your packages here (e.g., provider: ^6.1.2)
   cupertino_icons: ^1.0.2
 
 dev_dependencies:
@@ -93,7 +94,7 @@ flutter:
     for (final entity in entities) {
       final name = entity.path.split('/').last;
       
-      // Hide internal Git/Build folders from the IDE Explorer
+      // Hide internal hidden folders or build directories
       if (name.startsWith('.') || name == 'build') continue;
 
       if (entity is Directory) {
