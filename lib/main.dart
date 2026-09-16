@@ -57,8 +57,11 @@ class _WorkspacePageState extends State<WorkspacePage> {
   final List<File> _openTabs = [];
   File? _activeFile;
   String _savedFileSnapshot = '';
+  
   bool _isDirty = false;
+  final Set<String> _unpushedFiles = {};
 
+  // 0: None, 1: Explorer, 2: Git, 3: Search, 4: Console, 5: SSH
   int _activePanel = 0;
   bool _isPreviewMode = false;
   String _savedPat = '';
@@ -156,6 +159,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
         localDir: projectDir,
         onProgress: _log,
       );
+      
+      setState(() => _unpushedFiles.clear());
       _log('Commit & push completed.');
     } catch (e) {
       _log('Git push failed: $e');
@@ -214,7 +219,10 @@ class _WorkspacePageState extends State<WorkspacePage> {
     if (_activeFile == null) return;
     await _activeFile!.writeAsString(_editorController.text);
     _savedFileSnapshot = _editorController.text;
-    setState(() => _isDirty = false);
+    setState(() {
+      _isDirty = false;
+      _unpushedFiles.add(_activeFile!.path);
+    });
     _log('Saved: ${_activeFile!.path.split("/").last}');
   }
 
@@ -252,9 +260,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
     if (result == null) return;
 
     final token = result['token'] ?? '';
-    final target = result['target'] ?? 'android-arm64';
     final repo = result['repo'] ?? _targetRepo;
-    if (token.isEmpty) return;
+    final target = result['target'] ?? 'android-arm64';
+    if (token.isEmpty || repo.isEmpty) return;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('github_pat_token', token);
@@ -333,15 +341,43 @@ class _WorkspacePageState extends State<WorkspacePage> {
                       },
                     ),
                   ),
-                  if (_activePanel != 0)
-                    Container(
+                  Visibility(
+                    visible: _activePanel != 0,
+                    maintainState: true,
+                    maintainAnimation: true,
+                    maintainSize: false,
+                    child: Container(
                       width: isCompact ? 220 : 260,
                       decoration: const BoxDecoration(
                         color: Color(0xFF21252B),
                         border: Border(right: BorderSide(color: Color(0xFF282C34))),
                       ),
-                      child: _buildSidePanel(),
+                      child: IndexedStack(
+                        index: _activePanel > 0 ? _activePanel - 1 : 0,
+                        children: [
+                          IdeExplorerPanel(
+                            files: _files,
+                            activeFile: _activeFile,
+                            unpushedFiles: _unpushedFiles,
+                            onFileSelected: _openFile,
+                            onDeleteEntity: _deleteEntity,
+                            onNewFile: () => _newEntity(isDirectory: false),
+                            onNewFolder: () => _newEntity(isDirectory: true),
+                          ),
+                          IdeGitPanel(
+                            activeRepo: _targetRepo,
+                            isBusy: _isGitBusy,
+                            unpushedFiles: _unpushedFiles,
+                            onCommitAndPush: _commitAndPush,
+                            onChangeRepo: _switchTargetRepo,
+                          ),
+                          IdeSearchPanel(files: _files, onOpenFile: _openFile),
+                          IdeConsolePanel(logs: _consoleLogs, onClear: () => setState(() => _consoleLogs.clear())),
+                          const IdeSshPanel(),
+                        ],
+                      ),
                     ),
+                  ),
                   Expanded(
                     child: Column(
                       children: [
@@ -381,31 +417,5 @@ class _WorkspacePageState extends State<WorkspacePage> {
         ),
       ),
     );
-  }
-
-  Widget _buildSidePanel() {
-    switch (_activePanel) {
-      case 1:
-        return IdeExplorerPanel(
-          files: _files,
-          activeFile: _activeFile,
-          onFileSelected: _openFile,
-          onDeleteEntity: _deleteEntity,
-          onNewFile: () => _newEntity(isDirectory: false),
-          onNewFolder: () => _newEntity(isDirectory: true),
-        );
-      case 2:
-        return IdeGitPanel(
-          activeRepo: _targetRepo,
-          isBusy: _isGitBusy,
-          onCommitAndPush: _commitAndPush,
-          onChangeRepo: _switchTargetRepo,
-        );
-      case 3:
-        return IdeSearchPanel(files: _files, onOpenFile: _openFile);
-      case 4:
-      default:
-        return IdeConsolePanel(logs: _consoleLogs, onClear: () => setState(() => _consoleLogs.clear()));
-    }
   }
 }

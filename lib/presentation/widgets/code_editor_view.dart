@@ -28,35 +28,89 @@ class _CodeEditorViewState extends State<CodeEditorView> {
   bool _showFindBar = false;
   final TextEditingController _findController = TextEditingController();
   final TextEditingController _replaceController = TextEditingController();
+  
+  List<String> _currentSuggestions = [];
+  String _currentWord = '';
+  int _wordStartOffset = -1;
+
+  static const List<String> _dictionary = [
+    'Widget', 'build', 'BuildContext', 'StatelessWidget', 'StatefulWidget',
+    'State', 'override', 'Scaffold', 'AppBar', 'Text', 'Column', 'Row',
+    'Container', 'Center', 'Padding', 'EdgeInsets', 'Expanded', 'ListView',
+    'FutureBuilder', 'StreamBuilder', 'return', 'void', 'final', 'const',
+    'class', 'extends', 'implements', 'import', 'package', 'late', 'required',
+    'MaterialApp', 'ThemeData', 'Colors', 'TextStyle', 'SizedBox', 'Icons'
+  ];
 
   Map<String, TextStyle> get _activeTheme {
     switch (widget.themeName) {
-      case 'Dracula':
-        return draculaTheme;
-      case 'Monokai':
-        return monokaiSublimeTheme;
-      case 'GitHub Light':
-        return githubTheme;
-      case 'Atom One Dark':
-      default:
-        return atomOneDarkTheme;
+      case 'Dracula': return draculaTheme;
+      case 'Monokai': return monokaiSublimeTheme;
+      case 'GitHub Light': return githubTheme;
+      case 'Atom One Dark': default: return atomOneDarkTheme;
     }
   }
 
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_handleCursorChange);
+    widget.controller.addListener(_handleEditorChange);
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_handleCursorChange);
+    widget.controller.removeListener(_handleEditorChange);
     super.dispose();
   }
 
-  void _handleCursorChange() {
+  void _handleEditorChange() {
     widget.onCursorMoved?.call();
+    _updateSuggestions();
+  }
+
+  void _updateSuggestions() {
+    final text = widget.controller.text;
+    final sel = widget.controller.selection;
+    if (sel.baseOffset < 0 || sel.baseOffset != sel.extentOffset) {
+      if (_currentSuggestions.isNotEmpty) setState(() => _currentSuggestions = []);
+      return;
+    }
+
+    final offset = sel.baseOffset;
+    int start = offset - 1;
+    while (start >= 0 && RegExp(r'[a-zA-Z0-9_]').hasMatch(text[start])) {
+      start--;
+    }
+    start++;
+
+    if (start < offset) {
+      _currentWord = text.substring(start, offset);
+      _wordStartOffset = start;
+      if (_currentWord.length >= 2) {
+        final matches = _dictionary
+            .where((w) => w.toLowerCase().startsWith(_currentWord.toLowerCase()) && w != _currentWord)
+            .take(10)
+            .toList();
+        if (matches.length != _currentSuggestions.length || !matches.every((m) => _currentSuggestions.contains(m))) {
+          setState(() => _currentSuggestions = matches);
+        }
+        return;
+      }
+    }
+    
+    if (_currentSuggestions.isNotEmpty) setState(() => _currentSuggestions = []);
+  }
+
+  void _applySuggestion(String suggestion) {
+    final text = widget.controller.text;
+    final sel = widget.controller.selection;
+    final end = sel.baseOffset;
+    
+    final newText = text.replaceRange(_wordStartOffset, end, suggestion);
+    widget.controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: _wordStartOffset + suggestion.length),
+    );
   }
 
   void _insertText(String symbol) {
@@ -80,48 +134,6 @@ class _CodeEditorViewState extends State<CodeEditorView> {
     );
   }
 
-  void _showSnippetPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF21252B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: Text(
-                'INSERT SNIPPET',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFABB2BF),
-                ),
-              ),
-            ),
-            const Divider(height: 1, color: Color(0xFF282C34)),
-            ...EditorUtils.snippets.entries.map(
-              (entry) => ListTile(
-                dense: true,
-                leading: const Icon(Icons.code_outlined, color: Color(0xFF61AFEF), size: 18),
-                title: Text(entry.key, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _insertText(entry.value);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _findAndHighlight() {
     final query = _findController.text;
     if (query.isEmpty) return;
@@ -129,7 +141,6 @@ class _CodeEditorViewState extends State<CodeEditorView> {
     final text = widget.controller.text;
     final currentOffset = widget.controller.selection.end;
     var nextIndex = text.indexOf(query, currentOffset >= 0 ? currentOffset : 0);
-
     if (nextIndex == -1) nextIndex = text.indexOf(query, 0);
 
     if (nextIndex != -1) {
@@ -140,40 +151,9 @@ class _CodeEditorViewState extends State<CodeEditorView> {
     }
   }
 
-  void _replaceMatch() {
-    final query = _findController.text;
-    final replacement = _replaceController.text;
-    if (query.isEmpty) return;
-
-    final selection = widget.controller.selection;
-    if (selection.start >= 0 && selection.end > selection.start) {
-      final selectedText = widget.controller.text.substring(selection.start, selection.end);
-      if (selectedText == query) {
-        final newText = widget.controller.text.replaceRange(selection.start, selection.end, replacement);
-        widget.controller.value = TextEditingValue(
-          text: newText,
-          selection: TextSelection.collapsed(offset: selection.start + replacement.length),
-        );
-        _findAndHighlight();
-        return;
-      }
-    }
-    _findAndHighlight();
-  }
-
-  void _replaceAll() {
-    final query = _findController.text;
-    final replacement = _replaceController.text;
-    if (query.isEmpty) return;
-
-    widget.controller.text = widget.controller.text.replaceAll(query, replacement);
-  }
-
   @override
   Widget build(BuildContext context) {
-    const symbols = <String>[
-      '{', '}', '(', ')', ';', '"', "'", '=', '=>', 'Tab', '//', '<', '>', '.'
-    ];
+    const symbols = <String>['{', '}', '(', ')', ';', '"', "'", '=', '=>', 'Tab', '//', '<', '>', '.'];
 
     return Column(
       children: [
@@ -219,7 +199,7 @@ class _CodeEditorViewState extends State<CodeEditorView> {
             ),
           ),
 
-        // Scrollable editor area bounded strictly by Expanded
+        // Scrollable editor area
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -252,7 +232,43 @@ class _CodeEditorViewState extends State<CodeEditorView> {
           ),
         ),
 
-        // Accessory Bar
+        // Autocomplete Suggestion Bar
+        if (_currentSuggestions.isNotEmpty)
+          Container(
+            height: 32,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              color: Color(0xFF2C313A),
+              border: Border(top: BorderSide(color: Color(0xFF181A1F))),
+            ),
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              scrollDirection: Axis.horizontal,
+              itemCount: _currentSuggestions.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (context, index) {
+                final word = _currentSuggestions[index];
+                return InkWell(
+                  onTap: () => _applySuggestion(word),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3E4451),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      word,
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Color(0xFF61AFEF), fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+        // Symbol Accessory Bar
         Container(
           height: 38,
           decoration: const BoxDecoration(
@@ -265,22 +281,10 @@ class _CodeEditorViewState extends State<CodeEditorView> {
                 icon: const Icon(Icons.auto_fix_high_outlined, size: 16, color: Color(0xFF61AFEF)),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32),
-                tooltip: 'Format Code',
                 onPressed: _formatCode,
               ),
               IconButton(
-                icon: const Icon(Icons.data_object_outlined, size: 16, color: Color(0xFFE5C07B)),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32),
-                tooltip: 'Snippets',
-                onPressed: _showSnippetPicker,
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.search,
-                  size: 16,
-                  color: _showFindBar ? const Color(0xFF61AFEF) : const Color(0xFF5C6370),
-                ),
+                icon: Icon(Icons.search, size: 16, color: _showFindBar ? const Color(0xFF61AFEF) : const Color(0xFF5C6370)),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32),
                 onPressed: () => setState(() => _showFindBar = !_showFindBar),
@@ -307,12 +311,7 @@ class _CodeEditorViewState extends State<CodeEditorView> {
                         ),
                         child: Text(
                           item,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                            color: Color(0xFFABB2BF),
-                          ),
+                          style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFFABB2BF)),
                         ),
                       ),
                     );
