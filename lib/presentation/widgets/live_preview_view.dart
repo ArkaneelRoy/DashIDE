@@ -1,91 +1,121 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_eval/flutter_eval.dart';
 
 class LivePreviewView extends StatelessWidget {
   final String dartCode;
 
-  const LivePreviewView({super.key, required this.dartCode});
+  const LivePreviewView({
+    super.key,
+    required this.dartCode,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (dartCode.trim().isEmpty) {
-      return const Center(
-        child: Text(
-          'No code open to preview',
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-
     return Container(
-      color: const Color(0xFF1E1E2E),
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 380),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: const Color(0xFF282C34),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF3B4048)),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black45,
-                blurRadius: 16,
-                offset: Offset(0, 8),
-              ),
-            ],
+      color: Colors.white, // Standard app background for the preview
+      child: Stack(
+        children: [
+          // The actual interpreted Flutter UI
+          Positioned.fill(
+            child: _buildEvaluator(),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
+          
+          // A tiny overlay badge so you know you are in Preview mode
+          Positioned(
+            top: 16,
+            right: 16,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.cyanAccent.withOpacity(0.1),
-                  shape: BoxShape.circle,
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Icon(Icons.rocket_launch_outlined, color: Colors.cyanAccent, size: 40),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Ready for Remote Execution',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Source code is synced and verified. Tap "Sync & Build APK" in the toolbar to compile on GitHub Actions and install directly to this device.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Color(0xFFABB2BF), height: 1.4),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF21252B),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 16),
-                    const SizedBox(width: 8),
+                    Icon(Icons.bolt, size: 14, color: Colors.yellow),
+                    SizedBox(width: 4),
                     Text(
-                      '${dartCode.split("\n").length} lines loaded',
-                      style: const TextStyle(
+                      'LIVE EVAL',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                         fontFamily: 'monospace',
-                        fontSize: 12,
-                        color: Colors.greenAccent,
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEvaluator() {
+    if (dartCode.trim().isEmpty) {
+      return _buildErrorState('Editor is empty.');
+    }
+
+    try {
+      return EvalWidget(
+        packages: {
+          'demo_app': {
+            'main.dart': dartCode,
+          }
+        },
+        library: 'package:demo_app/main.dart',
+        // Look for the default root widget
+        function: 'MyApp',
+      );
+    } catch (e) {
+      return _buildErrorState(e.toString());
+    }
+  }
+
+  Widget _buildErrorState(String error) {
+    return Container(
+      color: const Color(0xFF1E1E24), // Match IDE dark theme on error
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Color(0xFFE06C75), size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'Evaluation Error',
+              style: TextStyle(
+                color: Color(0xFFE06C75),
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFABB2BF),
+                fontFamily: 'monospace',
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Note: Live Eval requires your root widget to be named `MyApp` and does not support external packages.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF5C6370),
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          ],
         ),
       ),
     );

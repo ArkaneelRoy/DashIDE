@@ -53,6 +53,8 @@ jobs:
         with:
           channel: 'stable'
           cache: true
+      - name: Generate Platform Folders
+        run: flutter create .
       - run: flutter pub get
       - name: Compile APK
         run: |
@@ -79,6 +81,8 @@ jobs:
       - run: |
           sudo apt-get update -y
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - name: Generate Platform Folders
+        run: flutter create .
       - run: flutter pub get
       - run: flutter build linux --release
       - name: Package Linux Bundle
@@ -98,6 +102,8 @@ jobs:
         with:
           channel: 'stable'
           cache: true
+      - name: Generate Platform Folders
+        run: flutter create .
       - run: flutter pub get
       - run: flutter build windows --release
       - name: Package Windows Bundle
@@ -118,6 +124,8 @@ jobs:
         with:
           channel: 'stable'
           cache: true
+      - name: Generate Platform Folders
+        run: flutter create .
       - run: flutter pub get
       - run: flutter build macos --release --no-codesign
       - name: Package macOS App

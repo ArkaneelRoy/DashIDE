@@ -1,28 +1,30 @@
 name: dash_ide
-description: DashIDE - An on-device Flutter IDE built with Flutter.
-publish_to: "none"
+description: A robust mobile-first Flutter IDE.
+publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_code_editor: ^0.3.1
-  flutter_highlight: ^0.7.0
-  highlight: ^0.7.0
-  path_provider: ^2.1.2
-  http: ^1.2.1
-  archive: ^3.6.1
-  open_filex: ^4.5.0
-  shared_preferences: ^2.2.3
+  cupertino_icons: ^1.0.2
+  flutter_code_editor: any
+  highlight: any
+  flutter_highlight: any
+  shared_preferences: any
+  http: any
+  open_filex: any
+  path_provider: any
+  archive: any
   dartssh2: ^2.12.0
+  flutter_eval: any
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^2.0.0
 
 flutter:
   uses-material-design: true
