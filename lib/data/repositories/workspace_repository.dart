@@ -8,28 +8,6 @@ class WorkspaceRepository {
     return Directory('${docDir.path}/DashIDE_Workspace');
   }
 
-  static const String defaultPubspec = '''name: demo_app
-description: A new Flutter project built in DashIDE.
-publish_to: 'none'
-version: 1.0.0+1
-
-environment:
-  sdk: '>=3.0.0 <4.0.0'
-
-dependencies:
-  flutter:
-    sdk: flutter
-  cupertino_icons: ^1.0.2
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^2.0.0
-
-flutter:
-  uses-material-design: true
-''';
-
   static const String defaultMainDart = '''import 'package:flutter/material.dart';
 
 void main() => runApp(const MyApp());
@@ -64,16 +42,13 @@ class MyApp extends StatelessWidget {
       await libDir.create(recursive: true);
     }
 
+    // Only create a minimal bootstrap main.dart if lib/ has nothing
     final mainFile = File('${libDir.path}/main.dart');
     if (!await mainFile.exists()) {
       await mainFile.writeAsString(defaultMainDart);
     }
-
-    final pubspecFile = File('${projectDir.path}/pubspec.yaml');
-    // Only write pubspec if it is completely missing or empty (0 bytes)
-    if (!await pubspecFile.exists() || (await pubspecFile.length()) == 0) {
-      await pubspecFile.writeAsString(defaultPubspec);
-    }
+    // No automatic pubspec creation or regeneration:
+    // pubspec.yaml persists exactly as written by the user.
   }
 
   Future<List<FileNode>> loadFileTree() async {
