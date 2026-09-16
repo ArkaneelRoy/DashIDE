@@ -50,7 +50,7 @@ class WorkspacePage extends StatefulWidget {
   State<WorkspacePage> createState() => _WorkspacePageState();
 }
 
-class _WorkspacePageState extends State<WorkspacePage> {
+class _WorkspacePageState extends State<WorkspacePage> with WidgetsBindingObserver {
   final WorkspaceRepository _repo = WorkspaceRepository();
   late final CodeController _editorController;
 
@@ -79,6 +79,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _editorController = CodeController(text: '', language: dart);
     _editorController.addListener(_handleEditorChange);
     _bootstrap();
@@ -86,9 +87,19 @@ class _WorkspacePageState extends State<WorkspacePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _editorController.removeListener(_handleEditorChange);
     _editorController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (_activeFile != null && _isDirty) {
+        _saveFile();
+      }
+    }
   }
 
   void _handleEditorChange() {

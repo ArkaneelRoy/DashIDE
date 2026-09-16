@@ -70,17 +70,8 @@ class MyApp extends StatelessWidget {
     }
 
     final pubspecFile = File('${projectDir.path}/pubspec.yaml');
-    bool needsPubspecRewrite = true;
-    if (await pubspecFile.exists()) {
-      try {
-        final content = await pubspecFile.readAsString();
-        if (content.contains('name: demo_app') && content.contains('sdk: flutter')) {
-          needsPubspecRewrite = false;
-        }
-      } catch (_) {}
-    }
-
-    if (needsPubspecRewrite) {
+    // Only write pubspec if it is completely missing or empty (0 bytes)
+    if (!await pubspecFile.exists() || (await pubspecFile.length()) == 0) {
       await pubspecFile.writeAsString(defaultPubspec);
     }
   }
